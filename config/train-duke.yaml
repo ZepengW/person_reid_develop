@@ -1,0 +1,27 @@
+mode: train_test
+gpu: [0]
+
+network-params:
+  name: network-duke
+  lr: 0.0001
+  lr_adjust:
+    - 20
+    - 40
+    - 60
+    - 90
+  weight_decay: 0.0003
+  epoch: 128
+  continue_train: True
+  optimzer: Adam
+
+dataset:
+  dataset_name: duke
+  dataset_path: ../dataset/DukeMTMC-reID
+  image_size:
+    - 256
+    - 128
+  num_workers: 8
+  batch_size: 4
+  seq_len: 30
+  type: image
+  num-mask: 6
