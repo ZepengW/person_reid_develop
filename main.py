@@ -8,6 +8,7 @@ from dataset import DatasetManager, DatasetVideo
 from model import ModelManager
 from torch.utils.data import DataLoader
 import yaml
+from tensorboardX import SummaryWriter
 
 # set cuda visible devices, and return the first gpu device
 def set_gpus_env(gpu_ids):
@@ -27,7 +28,7 @@ def set_gpus_env(gpu_ids):
     return torch.device('cuda:{0}'.format(gpu_ids[0]))
 
 
-def main(config):
+def main(config, writer_tensorboardX):
     device = set_gpus_env(config.get('gpu', [0]))
     ### pre transform methods on images
     t = tf.build_transforms()
@@ -38,7 +39,7 @@ def main(config):
                                      num_mask=dataset_config.get('num-mask', 6))
 
     model_config = config.get('network-params',dict())
-    model = ModelManager(model_config, device, class_num=dataset_manager.get_train_pid_num())
+    model = ModelManager(model_config, device, class_num=dataset_manager.get_train_pid_num(),writer=writer_tensorboardX)
 
     mode = config.get('mode', 'train')
     dataset_type = dataset_config.get('type','image')
@@ -106,20 +107,21 @@ def main(config):
         for i in range(model.trained_epoches, model_config.get('epoch', 64)):
             model.train(loader_train_source, i)
             if i % 10 == 0:
-                model.test(loader_query_source, loader_gallery_source)
+                model.test(loader_query_source, loader_gallery_source, epoch=i)
 
     logging.info("finish!")
 
 def init_logging():
     # log config
-    if not os.path.exists('./output/log'):
-        os.makedirs('./output/log')
-    logging.basicConfig(filename='./output/log/' + str(datetime.datetime.now().year).rjust(4, '0')
-                                 + str(datetime.datetime.now().month).rjust(2, '0')
-                                 + str(datetime.datetime.now().day).rjust(2, '0')
-                                 + str(datetime.datetime.now().hour).rjust(2, '0')
-                                 + str(datetime.datetime.now().minute).rjust(2, '0')
-                                 + str(datetime.datetime.now().second).rjust(2, '0') + '.txt',
+    log_dir_name = str(datetime.datetime.now().year).rjust(4, '0')\
+                   + str(datetime.datetime.now().month).rjust(2, '0')\
+                   + str(datetime.datetime.now().day).rjust(2, '0')\
+                   + str(datetime.datetime.now().hour).rjust(2, '0')\
+                   + str(datetime.datetime.now().minute).rjust(2, '0')\
+                   + str(datetime.datetime.now().second).rjust(2, '0')
+    if not os.path.isdir('./output/log'):
+        os.mkdir('./output/log')
+    logging.basicConfig(filename=f'./output/log/{log_dir_name}/log.txt',
                         level=logging.DEBUG,
                         format='###%(levelname)s###[%(asctime)s]%(message)s',
                         datefmt='%Y-%m-%d %H:%M:%S')
@@ -127,6 +129,9 @@ def init_logging():
     console.setLevel(logging.INFO)
     console.setFormatter(logging.Formatter('[%(asctime)s]%(message)s', datefmt='%Y-%m-%d %H:%M:%S'))
     logging.getLogger('').addHandler(console)
+    print(f'writing log to ./output/log/{log_dir_name}')
+    return log_dir_name
+
 
 
 if __name__ == '__main__':
@@ -135,14 +140,17 @@ if __name__ == '__main__':
     parser.add_argument('--cfg', type =str, default='config/train-mars.yaml',help='the config file(.yaml)')
 
     # initial logging module
-    init_logging()
+    log_dir_name = init_logging()
+    # initial tensorboardX
+    writer_tensorboardx = SummaryWriter(f'./output/log/{log_dir_name}')
 
     config = parser.parse_args()
     cfg_path = config.cfg
     if not os.path.exists(cfg_path):
-        logging.error('can not find the config file:'+cfg_path)
+        logging.error(f'can not find the config file:{cfg_path}')
     with open(cfg_path) as f:
         cfg = f.read()
         yaml_cfg = yaml.safe_load(cfg)
-    print(yaml_cfg)
-    main(yaml_cfg)
+    logging.info(str(yaml_cfg))
+    main(yaml_cfg, writer_tensorboardx)
+    writer_tensorboardx.close()

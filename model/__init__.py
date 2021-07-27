@@ -9,16 +9,17 @@ from utils.center_loss import CenterLoss
 import numpy as np
 from utils.re_ranking import re_ranking
 from torchvision.models.resnet import resnet50
+from tensorboardX import SummaryWriter
 
 class ModelManager:
-    def __init__(self, cfg: dict, device, class_num=1000):
+    def __init__(self, cfg: dict, device, class_num=1000, writer: SummaryWriter = None):
         self.device = device
         self.model_name = cfg.get('name', 'default-network')
         self.graph_nodes_num = 6
 
         # model load
         # add your own network here
-        self.net = resnet50(pretrained=True,num_classes = class_num)
+        self.net = resnet50(pretrained=False,num_classes = class_num)
 
         # Multi-GPU Set
         if torch.cuda.device_count() > 1:
@@ -46,6 +47,10 @@ class ModelManager:
                 continue
             params += [{"params": [value], "lr": self.lr, "weight_decay": self.weight_decay}]
         self.optimizer = getattr(torch.optim, cfg.get('optimzer', 'Adam'))(params)
+
+        #tensorboardX
+        self.writer = writer
+        writer.add_graph(self.net)
 
     @staticmethod
     def load_model(model, name):
@@ -100,12 +105,13 @@ class ModelManager:
             # update model
             total_loss.backward()
             self.optimizer.step()
-
-        logging.info('[Epoch:{:0>4d}] LOSS=[total:{:.4f}'
+        logging.info('[Epoch:{:0>4d}] LOSS=[total:{:.4f}]'
                      .format(epoch, np.mean(total_loss_array[0])))
+        if self.writer is not None:
+            self.writer.add_scalar('train/loss', np.mean(total_loss_array[0]), epoch)
         self.save_model(self.net, self.model_name, epoch)
 
-    def test(self, queryLoader: DataLoader, galleryLoader: DataLoader):
+    def test(self, queryLoader: DataLoader, galleryLoader: DataLoader, epoch = 0):
         logging.info("begin to test")
         self.net.eval()
         gf = []
@@ -145,6 +151,13 @@ class ModelManager:
         logging.info("test result:[rank-1:{:.2%}],[rank-3:{:.2%}],[rank-5:{:.2%}],[rank-10:{:.2%}]"
                      .format(cmc[0], cmc[2], cmc[4], cmc[9]))
         logging.info("test result:[mAP:{:.2%}],[mINP:{:.2%}]".format(mAP, mINP))
+        if self.writer is not None:
+            self.writer.add_scalar('test/rank-1', cmc[0], epoch)
+            self.writer.add_scalar('test/mAP', mAP, epoch)
+            self.writer.add_scalar('test/mINP', mINP, epoch)
+            for i, p in enumerate(cmc):
+                self.writer.add_scalar(f'test-cmc/e{epoch}',p,i)
+
 
     def adjust_lr(self, epoch):
         lr = self.lr * (
