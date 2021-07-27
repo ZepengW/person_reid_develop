@@ -8,6 +8,7 @@ from dataset.dataset_duke import Duke
 from dataset.dataset_market import Market
 from dataset.dataset_msmt import MSMT17
 from dataset.dataset_mars import Mars
+from dataset.dataset_ltcc import LTCC
 import numpy as np
 
 import logging
@@ -16,7 +17,8 @@ DATASET_MAP = {
     'market': Market,
     'duke': Duke,
     'msmt17': MSMT17,
-    'mars': Mars
+    'mars': Mars,
+    'ltcc': LTCC
 }
 
 
@@ -63,7 +65,7 @@ class DatasetImage(Dataset):
         return len(self.dataset)
 
     def __getitem__(self, index):
-        img_path, pid, camid, mask_path = self.dataset[index]
+        img_path, pid, camid = self.dataset[index]
         img = Image.open(img_path).convert('RGB')
         if self.transform is not None:
             img = self.transform(img)
@@ -90,11 +92,10 @@ class DatasetVideo(Dataset):
         return len(self.data_list)
 
     def __getitem__(self, index):
-        img_paths, pid, cid, mask_paths = self.data_list[index]
+        img_paths, pid, cid = self.data_list[index]
         # 适配image类型数据集，令其作为seq_len为1的video类型数据
         if type(img_paths) is str:
             img_paths = [img_paths]
-            mask_paths = [mask_paths]
         num = len(img_paths)
 
         if self.sample == 'constrain_random':

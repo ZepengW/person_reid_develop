@@ -133,11 +133,9 @@ class Mars(object):
 
             # append image names with directory information
             img_paths = [osp.join(self.dataset_path, home_dir, img_name[:4], img_name) for img_name in img_names]
-            mask_paths = [osp.join(self.dataset_path, 'mask', img_name.split('.')[0]+'.npy') for img_name in img_names]
             if len(img_paths) >= min_seq_len:
                 img_paths = tuple(img_paths)
-                mask_paths = tuple(mask_paths)
-                tracklets.append((img_paths, pid, camid, mask_paths))
+                tracklets.append((img_paths, pid, camid))
                 num_imgs_per_tracklet.append(len(img_paths))
 
         num_tracklets = len(tracklets)

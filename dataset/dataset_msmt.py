@@ -41,9 +41,7 @@ class MSMT17(object):
             img_path = os.path.join(dir,file)
             pid = int(file.split('_')[0])
             cid = int((file.split('c')[1]).split('_')[0])
-            bodypix_file = file.split('.')[0] + '.npy'
-            mask_path = osp.join(self.dataset_dir,'mask',bodypix_file)
-            train_list.append((img_path,pid,cid,mask_path))
+            train_list.append((img_path,pid,cid))
             id_set.add(pid)
         # relabel id to continues
         if relabel:
