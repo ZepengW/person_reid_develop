@@ -8,7 +8,7 @@ from utils.triplet_loss import CrossEntropyLabelSmooth, WeightedRegularizedTripl
 from utils.center_loss import CenterLoss
 import numpy as np
 from utils.re_ranking import re_ranking
-
+from torchvision.models.resnet import resnet50
 
 class ModelManager:
     def __init__(self, cfg: dict, device, class_num=1000):
@@ -17,8 +17,8 @@ class ModelManager:
         self.graph_nodes_num = 6
 
         # model load
-        # todo: add network
-        self.net = None
+        # add your own network here
+        self.net = resnet50(pretrained=True,num_classes = class_num)
 
         # Multi-GPU Set
         if torch.cuda.device_count() > 1:
