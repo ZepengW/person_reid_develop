@@ -49,6 +49,6 @@ class MSMT17(object):
             id_list.sort()
             train_list_relabel = []
             for i in train_list:
-                train_list_relabel.append((i[0],id_list.index(i[1]),i[2],i[3]))
+                train_list_relabel.append((i[0],id_list.index(i[1]),i[2]))
             train_list = train_list_relabel
         return train_list, len(id_set), len(train_list)
