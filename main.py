@@ -5,7 +5,7 @@ import logging
 import datetime
 from dataset import transforms as tf
 from dataset import DatasetManager, DatasetVideo
-from models.model_manager_v2 import ModelManager
+from model import ModelManager
 from torch.utils.data import DataLoader
 import yaml
 
