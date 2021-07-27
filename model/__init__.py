@@ -50,7 +50,6 @@ class ModelManager:
 
         #tensorboardX
         self.writer = writer
-        writer.add_graph(self.net)
 
     @staticmethod
     def load_model(model, name):
