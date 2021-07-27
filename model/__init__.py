@@ -112,11 +112,10 @@ class ModelManager:
         gPids = np.array([], dtype=int)
         gCids = np.array([], dtype=int)
         logging.info("compute features of gallery samples")
-        for idx, (imgs, masks, pids, cids) in enumerate(galleryLoader):
+        for idx, (imgs, pids, cids) in enumerate(galleryLoader):
             imgs = imgs.to(self.device)
-            masks = masks.to(self.device)
             with torch.no_grad():
-                f_whole = self.net(imgs, masks, self.adj)
+                f_whole = self.net(imgs)
                 gf.append(f_whole)
                 gPids = np.concatenate((gPids, pids.numpy()), axis=0)
                 gCids = np.concatenate((gCids, cids.numpy()), axis=0)
@@ -126,11 +125,10 @@ class ModelManager:
         qf = []
         qPids = np.array([], dtype=int)
         qCids = np.array([], dtype=int)
-        for idx, (imgs, masks, pids, cids) in enumerate(queryLoader):
+        for idx, (imgs, pids, cids) in enumerate(queryLoader):
             imgs = imgs.to(self.device)
-            masks = masks.to(self.device)
             with torch.no_grad():
-                f_whole = self.net(imgs, masks, self.adj)
+                f_whole = self.net(imgs)
                 qf.append(f_whole)
                 qPids = np.concatenate((qPids, pids.numpy()), axis=0)
                 qCids = np.concatenate((qCids, cids.numpy()), axis=0)
