@@ -119,10 +119,8 @@ def init_logging():
                    + str(datetime.datetime.now().hour).rjust(2, '0')\
                    + str(datetime.datetime.now().minute).rjust(2, '0')\
                    + str(datetime.datetime.now().second).rjust(2, '0')
-    if not os.path.isdir('./output'):
-        os.mkdir('./output')
-    if not os.path.isdir('./output/log'):
-        os.mkdir('./output/log')
+    if not os.path.isdir(f'./output/log/{log_dir_name}'):
+        os.mkdir(f'./output/log/{log_dir_name}')
     logging.basicConfig(filename=f'./output/log/{log_dir_name}/log.txt',
                         level=logging.DEBUG,
                         format='###%(levelname)s###[%(asctime)s]%(message)s',
@@ -141,6 +139,10 @@ if __name__ == '__main__':
 
     parser.add_argument('--cfg', type =str, default='config/train-mars.yaml',help='the config file(.yaml)')
 
+    if not os.path.isdir('./output'):
+        os.mkdir('./output')
+    if not os.path.isdir('./output/log'):
+        os.mkdir('./output/log')
     # initial logging module
     log_dir_name = init_logging()
     # initial tensorboardX
