@@ -10,7 +10,7 @@ network-params:
     - 60
     - 90
   weight_decay: 0.0003
-  epoch: 128
+  epoch: 64
   continue_train: True
   optimzer: Adam
 
@@ -21,7 +21,7 @@ dataset:
     - 256
     - 128
   num_workers: 8
-  batch_size: 16
+  batch_size: 128
   seq_len: 30
   type: image
   num-mask: 6

@@ -119,6 +119,8 @@ def init_logging():
                    + str(datetime.datetime.now().hour).rjust(2, '0')\
                    + str(datetime.datetime.now().minute).rjust(2, '0')\
                    + str(datetime.datetime.now().second).rjust(2, '0')
+    if not os.path.isdir('./output'):
+        os.mkdir('./output')
     if not os.path.isdir('./output/log'):
         os.mkdir('./output/log')
     logging.basicConfig(filename=f'./output/log/{log_dir_name}/log.txt',
