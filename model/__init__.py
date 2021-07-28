@@ -164,6 +164,10 @@ class ModelManager:
             self.writer.add_scalar('test/mINP', mINP, epoch)
             for i, p in enumerate(cmc):
                 self.writer.add_scalar(f'test-cmc/e{epoch}',p,i)
+            # feature visualization
+            features_test = torch.cat([gf,qf])
+            labels = [str(s)+'_g' for s in gPids.tolist()] + [str(s)+'_q' for s in qPids.tolist()]
+            self.writer.add_embedding(features_test, metadata=labels, global_step=epoch, tag='test')
 
 
     def adjust_lr(self, epoch):
