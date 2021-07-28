@@ -48,7 +48,7 @@ class LTCC(object):
             img_path = os.path.join(dir,file)
             p_id = int(file.split('_')[0])
             clothes_id = int(file.split('_')[1])
-            camera_id = int(file.split('_')[2])
+            camera_id = int(file.split('_')[2].split('c')[1])
             train_list.append((img_path,p_id,camera_id,clothes_id))
             id_set.add(p_id)
         # relabel id to continues

@@ -1,0 +1,26 @@
+mode: train_test
+gpu: [0]
+
+network-params:
+  name: network-ltcc
+  lr: 0.0001
+  lr_adjust:
+    - 20
+    - 40
+    - 60
+    - 90
+  weight_decay: 0.0003
+  epoch: 64
+  continue_train: True
+  optimzer: Adam
+
+dataset:
+  dataset_name: ltcc
+  dataset_path: ../dataset/LTCC_ReID
+  image_size:
+    - 256
+    - 128
+  num_workers: 8
+  batch_size: 128
+  seq_len: 30
+  type: image

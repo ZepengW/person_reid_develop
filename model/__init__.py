@@ -89,7 +89,7 @@ class ModelManager:
         self.net.train()
         batch_num = len(dataloader)
         total_loss_array = np.zeros([1, batch_num])
-        for idx, (imgs, ids, _) in enumerate(dataloader):
+        for idx, (imgs, ids, _, _) in enumerate(dataloader):
             self.optimizer.zero_grad()
 
             # extract body part features
@@ -117,7 +117,7 @@ class ModelManager:
         gPids = np.array([], dtype=int)
         gCids = np.array([], dtype=int)
         logging.info("compute features of gallery samples")
-        for idx, (imgs, pids, cids) in enumerate(galleryLoader):
+        for idx, (imgs, pids, cids, clothes_ids) in enumerate(galleryLoader):
             imgs = imgs.to(self.device)
             with torch.no_grad():
                 f_whole = self.net(imgs)
@@ -130,7 +130,7 @@ class ModelManager:
         qf = []
         qPids = np.array([], dtype=int)
         qCids = np.array([], dtype=int)
-        for idx, (imgs, pids, cids) in enumerate(queryLoader):
+        for idx, (imgs, pids, cids, clothes_ids) in enumerate(queryLoader):
             imgs = imgs.to(self.device)
             with torch.no_grad():
                 f_whole = self.net(imgs)

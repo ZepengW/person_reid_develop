@@ -65,11 +65,18 @@ class DatasetImage(Dataset):
         return len(self.dataset)
 
     def __getitem__(self, index):
-        img_path, pid, camid = self.dataset[index]
+        item = self.dataset[index]
+        img_path = item[0]
+        p_id = item[1]
+        cam_id = item[2]
+        if len(item) > 3:
+            clothes_id = item[3]
+        else:
+            clothes_id = 0
         img = Image.open(img_path).convert('RGB')
         if self.transform is not None:
             img = self.transform(img)
-        return img, pid, camid
+        return img, p_id, cam_id,clothes_id
 
 
 class DatasetVideo(Dataset):
@@ -139,7 +146,7 @@ class DatasetVideo(Dataset):
                 imgs.append(img)
 
             imgs = torch.cat(imgs, dim=0)
-            return imgs, pid, cid
+            return imgs, pid, cid, 0
         elif self.sample == 'evenly':
             """
             Evenly sample seq_len items from num items.
@@ -180,4 +187,4 @@ class DatasetVideo(Dataset):
                 imgs_list.append(imgs)
 
             imgs_array = torch.stack(imgs_list)
-            return imgs_array, pid, cid
+            return imgs_array, pid, cid, 0
