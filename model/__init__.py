@@ -8,7 +8,7 @@ from utils.triplet_loss import CrossEntropyLabelSmooth, WeightedRegularizedTripl
 from utils.center_loss import CenterLoss
 import numpy as np
 from utils.re_ranking import re_ranking
-from torchvision.models.resnet import resnet50
+from model.net.resnet import resnet50
 from tensorboardX import SummaryWriter
 
 class ModelManager:
@@ -89,14 +89,15 @@ class ModelManager:
         self.net.train()
         batch_num = len(dataloader)
         total_loss_array = np.zeros([1, batch_num])
+        pids_l = []
+        features_vis = []
         for idx, (imgs, ids, _, _) in enumerate(dataloader):
             self.optimizer.zero_grad()
 
             # extract body part features
             imgs = imgs.to(self.device)
-            c_global = self.net(imgs)
+            c_global, f = self.net(imgs)
             ids = ids.to(self.device)
-
             loss_xent_global = self.lossesFunction['xent_global'](c_global, ids)
             total_loss = loss_xent_global
 
@@ -104,10 +105,17 @@ class ModelManager:
             # update model
             total_loss.backward()
             self.optimizer.step()
+
+            #vis features
+            pids_l += ids.tolist()  # record pid for visualization
+            f = PCA_svd(f,3)
+            features_vis = features_vis + f.tolist()
+
         logging.info('[Epoch:{:0>4d}] LOSS=[total:{:.4f}]'
                      .format(epoch, np.mean(total_loss_array[0])))
         if self.writer is not None:
             self.writer.add_scalar('train/loss', np.mean(total_loss_array[0]), epoch)
+            self.writer.add_embedding(features_vis, metadata=pids_l, global_step=epoch, tag='train')
         self.save_model(self.net, self.model_name, epoch)
 
     def test(self, queryLoader: DataLoader, galleryLoader: DataLoader, epoch = 0):
@@ -120,7 +128,7 @@ class ModelManager:
         for idx, (imgs, pids, cids, clothes_ids) in enumerate(galleryLoader):
             imgs = imgs.to(self.device)
             with torch.no_grad():
-                f_whole = self.net(imgs)
+                c, f_whole = self.net(imgs)
                 gf.append(f_whole)
                 gPids = np.concatenate((gPids, pids.numpy()), axis=0)
                 gCids = np.concatenate((gCids, cids.numpy()), axis=0)
@@ -133,7 +141,7 @@ class ModelManager:
         for idx, (imgs, pids, cids, clothes_ids) in enumerate(queryLoader):
             imgs = imgs.to(self.device)
             with torch.no_grad():
-                f_whole = self.net(imgs)
+                c,f_whole = self.net(imgs)
                 qf.append(f_whole)
                 qPids = np.concatenate((qPids, pids.numpy()), axis=0)
                 qCids = np.concatenate((qCids, cids.numpy()), axis=0)
@@ -163,3 +171,15 @@ class ModelManager:
                 0.1 ** np.sum(epoch >= np.array(self.lr_adjust)))
         for param_group in self.optimizer.param_groups:
             param_group['lr'] = lr
+
+def PCA_svd(X, k, center=True):
+    n = X.size()[0]
+    ones = torch.ones(n).view([n, 1])
+    h = ((1 / n) * torch.mm(ones, ones.t())) if center else torch.zeros(n * n).view([n, n])
+    H = torch.eye(n) - h
+    H = H.cuda()
+    X_center = torch.mm(H.double(), X.double())
+    u, s, v = torch.svd(X_center)
+    components = v[:k].t()
+    # explained_variance = torch.mul(s[:k], s[:k])/(n-1)
+    return components
