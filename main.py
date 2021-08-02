@@ -10,6 +10,7 @@ from torch.utils.data import DataLoader
 import yaml
 from tensorboardX import SummaryWriter
 
+
 # set cuda visible devices, and return the first gpu device
 def set_gpus_env(gpu_ids):
     os.environ['CUDA_VISIBLE_DEVICES'] = ','.join([str(id) for id in gpu_ids])
@@ -19,10 +20,10 @@ def set_gpus_env(gpu_ids):
     gpus_count = torch.cuda.device_count()
     for gpu_id in gpu_ids:
         if gpu_id >= gpus_count:
-            logging.warning('gpu id:{0} exceeds the limit , which only have {1} gpus'.format(gpu_id,gpus_count))
+            logging.warning('gpu id:{0} exceeds the limit , which only have {1} gpus'.format(gpu_id, gpus_count))
             gpu_ids.remove(gpu_id)
         logging.info('using gpu: id is ' + str(gpu_id) + ' name is ' + torch.cuda.get_device_name(gpu_id))
-    if len(gpu_ids)==0:
+    if len(gpu_ids) == 0:
         gpu_ids.append(0)
         logging.warning('all the config gpus can not be used, use gpu:0')
     return torch.device('cuda:{0}'.format(gpu_ids[0]))
@@ -38,37 +39,39 @@ def main(config, writer_tensorboardX):
     dataset_manager = DatasetManager(dataset_config.get('dataset_name', ''), dataset_config.get('dataset_path', ''),
                                      num_mask=dataset_config.get('num-mask', 6))
 
-    model_config = config.get('network-params',dict())
-    model = ModelManager(model_config, device, class_num=dataset_manager.get_train_pid_num(),writer=writer_tensorboardX)
+    model_config = config.get('network-params', dict())
+    model = ModelManager(model_config, device, class_num=dataset_manager.get_train_pid_num(),
+                         writer=writer_tensorboardX)
 
     mode = config.get('mode', 'train')
-    dataset_type = dataset_config.get('type','image')
-    get_dataset = getattr(dataset_manager,'get_dataset_'+dataset_type)
+    dataset_type = dataset_config.get('type', 'image')
+    get_dataset = getattr(dataset_manager, 'get_dataset_' + dataset_type)
 
     if 'train' == mode:
         logging.info("loading train data")
         loader_train_source = DataLoader(
-            get_dataset('train',transform=t,transform_mask=t_mask),
+            get_dataset('train', transform=t, transform_mask=t_mask),
             batch_size=dataset_config.get('batch_size', 16),
             num_workers=dataset_config.get('num_workers', 8),
             drop_last=False,
             shuffle=True
         )
         logging.info("load train data finish")
-        logging.info("prepare to train from epoch[{0}] to epoch[{1}]".format(model.trained_epoches, model_config.get('epoch',64)-1))
-        for i in range(model.trained_epoches, model_config.get('epoch',64)):
+        logging.info("prepare to train from epoch[{0}] to epoch[{1}]".format(model.trained_epoches,
+                                                                             model_config.get('epoch', 64) - 1))
+        for i in range(model.trained_epoches, model_config.get('epoch', 64)):
             model.train(loader_train_source, i)
     elif 'test' == mode:
         logging.info("loading test data")
         loader_gallery_source = DataLoader(
-            get_dataset('test',transform=t,transform_mask=t_mask),
+            get_dataset('test', transform=t, transform_mask=t_mask),
             batch_size=dataset_config.get('batch_size', 16),
             num_workers=dataset_config.get('num_workers', 8),
             drop_last=False,
             shuffle=True
         )
         loader_query_source = DataLoader(
-            get_dataset('query',transform=t,transform_mask=t_mask),
+            get_dataset('query', transform=t, transform_mask=t_mask),
             batch_size=dataset_config.get('batch_size', 16),
             num_workers=dataset_config.get('num_workers', 8),
             drop_last=False,
@@ -79,7 +82,7 @@ def main(config, writer_tensorboardX):
     elif 'train_test' == mode:
         logging.info("loading train data")
         loader_train_source = DataLoader(
-        get_dataset('train', transform=t, transform_mask=t_mask),
+            get_dataset('train', transform=t, transform_mask=t_mask),
             batch_size=dataset_config.get('batch_size', 16),
             num_workers=dataset_config.get('num_workers', 8),
             drop_last=False,
@@ -103,7 +106,7 @@ def main(config, writer_tensorboardX):
         )
         logging.info("load test data finish")
         logging.info("prepare to train from epoch[{0}] to epoch[{1}]".format(model.trained_epoches,
-                                                                         model_config.get('epoch', 64) - 1))
+                                                                             model_config.get('epoch', 64) - 1))
         for i in range(model.trained_epoches, model_config.get('epoch', 64)):
             model.train(loader_train_source, i)
             if i % 10 == 0:
@@ -111,14 +114,17 @@ def main(config, writer_tensorboardX):
 
     logging.info("finish!")
 
-def init_logging():
+
+def init_logging(task_name=''):
     # log config
-    log_dir_name = str(datetime.datetime.now().year).rjust(4, '0')\
-                   + str(datetime.datetime.now().month).rjust(2, '0')\
-                   + str(datetime.datetime.now().day).rjust(2, '0')\
-                   + str(datetime.datetime.now().hour).rjust(2, '0')\
-                   + str(datetime.datetime.now().minute).rjust(2, '0')\
+    log_dir_name = str(datetime.datetime.now().year).rjust(4, '0') \
+                   + str(datetime.datetime.now().month).rjust(2, '0') \
+                   + str(datetime.datetime.now().day).rjust(2, '0') \
+                   + str(datetime.datetime.now().hour).rjust(2, '0') \
+                   + str(datetime.datetime.now().minute).rjust(2, '0') \
                    + str(datetime.datetime.now().second).rjust(2, '0')
+    if task_name is not '':
+        log_dir_name = f'{task_name}-{log_dir_name}'
     if not os.path.isdir(f'./output/log/{log_dir_name}'):
         os.mkdir(f'./output/log/{log_dir_name}')
     logging.basicConfig(filename=f'./output/log/{log_dir_name}/log.txt',
@@ -133,20 +139,9 @@ def init_logging():
     return log_dir_name
 
 
-
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-
-    parser.add_argument('--cfg', type =str, default='config/train-mars.yaml',help='the config file(.yaml)')
-
-    if not os.path.isdir('./output'):
-        os.mkdir('./output')
-    if not os.path.isdir('./output/log'):
-        os.mkdir('./output/log')
-    # initial logging module
-    log_dir_name = init_logging()
-    # initial tensorboardX
-    writer_tensorboardx = SummaryWriter(f'./output/log/{log_dir_name}')
+    parser.add_argument('--cfg', type=str, default='config/train-mars.yaml', help='the config file(.yaml)')
 
     config = parser.parse_args()
     cfg_path = config.cfg
@@ -156,5 +151,17 @@ if __name__ == '__main__':
         cfg = f.read()
         yaml_cfg = yaml.safe_load(cfg)
     logging.info(str(yaml_cfg))
+
+    if not os.path.isdir('./output'):
+        os.mkdir('./output')
+    if not os.path.isdir('./output/log'):
+        os.mkdir('./output/log')
+
+    # initial logging module
+    log_dir_name = init_logging(task_name=yaml_cfg.get('task-name', ''))
+    # initial tensorboardX
+    writer_tensorboardx = SummaryWriter(f'./output/log/{log_dir_name}')
+
     main(yaml_cfg, writer_tensorboardx)
+
     writer_tensorboardx.close()
