@@ -142,8 +142,9 @@ class ModelManager:
         qf = []
         qPids = np.array([], dtype=int)
         qCids = np.array([], dtype=int)
-        for idx, (imgs, pids, cids, clothes_ids) in enumerate(queryLoader):
+        for idx, (imgs, pids, cids, clothes_ids, masks) in enumerate(queryLoader):
             imgs = imgs.to(self.device)
+            masks = masks.to(self.device)
             with torch.no_grad():
                 f_whole = self.net(imgs)
                 qf.append(f_whole)
