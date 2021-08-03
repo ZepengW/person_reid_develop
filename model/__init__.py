@@ -146,7 +146,7 @@ class ModelManager:
             imgs = imgs.to(self.device)
             masks = masks.to(self.device)
             with torch.no_grad():
-                f_whole = self.net(imgs)
+                f_whole = self.net(imgs,masks)
                 qf.append(f_whole)
                 qPids = np.concatenate((qPids, pids.numpy()), axis=0)
                 qCids = np.concatenate((qCids, cids.numpy()), axis=0)
