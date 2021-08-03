@@ -8,7 +8,7 @@ from utils.triplet_loss import CrossEntropyLabelSmooth, WeightedRegularizedTripl
 from utils.center_loss import CenterLoss
 import numpy as np
 from utils.re_ranking import re_ranking
-from model.net.resnet import resnet50
+from model.net.multi_branch_network import MbNetwork
 from tensorboardX import SummaryWriter
 
 class ModelManager:
@@ -19,7 +19,7 @@ class ModelManager:
 
         # model load
         # add your own network here
-        self.net = resnet50(pretrained=False,num_classes = class_num)
+        self.net = MbNetwork()
 
         # Multi-GPU Set
         if torch.cuda.device_count() > 1:
@@ -36,12 +36,14 @@ class ModelManager:
         # loss function
         self.lossesFunction = {}
         self.lossesFunction['xent_global'] = nn.CrossEntropyLoss()
+        self.lossesFunction['trip_weight'] = WeightedRegularizedTriplet()
 
         # optim
         self.lr = cfg.get('lr', 0.0001)
         self.lr_adjust = cfg.get('lr_adjust', [])
         self.weight_decay = cfg.get('weight_decay', 0.0005)
         params = []
+
         for key, value in self.net.named_parameters():
             if not value.requires_grad:
                 continue
@@ -96,10 +98,11 @@ class ModelManager:
 
             # extract body part features
             imgs = imgs.to(self.device)
-            c_global, f = self.net(imgs)
+            masks = masks.to(self.device)
+            f = self.net(imgs,masks)
             ids = ids.to(self.device)
-            loss_xent_global = self.lossesFunction['xent_global'](c_global, ids)
-            total_loss = loss_xent_global
+            loss_trip = self.lossesFunction['trip_weight'](f, ids)[0]
+            total_loss = loss_trip
 
             total_loss_array[0][idx] = (total_loss.cpu())
             # update model
@@ -125,10 +128,11 @@ class ModelManager:
         gPids = np.array([], dtype=int)
         gCids = np.array([], dtype=int)
         logging.info("compute features of gallery samples")
-        for idx, (imgs, pids, cids, clothes_ids) in enumerate(galleryLoader):
+        for idx, (imgs, pids, cids, clothes_ids, masks) in enumerate(galleryLoader):
             imgs = imgs.to(self.device)
+            masks = masks.to(self.device)
             with torch.no_grad():
-                c, f_whole = self.net(imgs)
+                f_whole = self.net(imgs,masks)
                 gf.append(f_whole)
                 gPids = np.concatenate((gPids, pids.numpy()), axis=0)
                 gCids = np.concatenate((gCids, cids.numpy()), axis=0)
@@ -138,10 +142,11 @@ class ModelManager:
         qf = []
         qPids = np.array([], dtype=int)
         qCids = np.array([], dtype=int)
-        for idx, (imgs, pids, cids, clothes_ids) in enumerate(queryLoader):
+        for idx, (imgs, pids, cids, clothes_ids, masks) in enumerate(queryLoader):
             imgs = imgs.to(self.device)
+            masks = masks.to(self.device)
             with torch.no_grad():
-                c,f_whole = self.net(imgs)
+                f_whole = self.net(imgs)
                 qf.append(f_whole)
                 qPids = np.concatenate((qPids, pids.numpy()), axis=0)
                 qCids = np.concatenate((qCids, cids.numpy()), axis=0)
