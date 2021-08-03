@@ -123,7 +123,7 @@ def init_logging(task_name=''):
                    + str(datetime.datetime.now().hour).rjust(2, '0') \
                    + str(datetime.datetime.now().minute).rjust(2, '0') \
                    + str(datetime.datetime.now().second).rjust(2, '0')
-    if task_name is not '':
+    if task_name != '':
         log_dir_name = f'{task_name}-{log_dir_name}'
     if not os.path.isdir(f'./output/log/{log_dir_name}'):
         os.mkdir(f'./output/log/{log_dir_name}')

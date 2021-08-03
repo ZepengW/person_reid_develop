@@ -9,6 +9,7 @@ from dataset.dataset_market import Market
 from dataset.dataset_msmt import MSMT17
 from dataset.dataset_mars import Mars
 from dataset.dataset_ltcc import LTCC
+from dataset.mask import read_person_mask
 import numpy as np
 
 import logging
@@ -20,6 +21,7 @@ DATASET_MAP = {
     'mars': Mars,
     'ltcc': LTCC
 }
+
 
 
 class DatasetManager(object):
@@ -69,14 +71,17 @@ class DatasetImage(Dataset):
         img_path = item[0]
         p_id = item[1]
         cam_id = item[2]
-        if len(item) > 3:
-            clothes_id = item[3]
-        else:
-            clothes_id = 0
+        clothes_id = item[3]
+        mask_path = item[4]
         img = Image.open(img_path).convert('RGB')
         if self.transform is not None:
             img = self.transform(img)
-        return img, p_id, cam_id,clothes_id
+
+        mask = read_person_mask(mask_path)
+        mask = torch.from_numpy(mask).float()
+        if self.transform_mask is not None:
+            mask = self.transform_mask(mask)
+        return img, p_id, cam_id, clothes_id, mask
 
 
 class DatasetVideo(Dataset):

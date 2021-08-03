@@ -39,7 +39,7 @@ class LTCC(object):
 
 
     def _process_data(self,dir,relabel=False):
-        train_list = []
+        data_list = []
         id_set = set()
         files = os.listdir(dir)
         for file in files:
@@ -49,14 +49,15 @@ class LTCC(object):
             p_id = int(file.split('_')[0])
             clothes_id = int(file.split('_')[1])
             camera_id = int(file.split('_')[2].split('c')[1])
-            train_list.append((img_path,p_id,camera_id,clothes_id))
+            mask_path = os.path.join(dir+'-mask',file)
+            data_list.append((img_path,p_id,camera_id,clothes_id,mask_path))
             id_set.add(p_id)
         # relabel id to continues
         if relabel:
             id_list = list(id_set)
             id_list.sort()
             train_list_relabel = []
-            for i in train_list:
-                train_list_relabel.append((i[0],id_list.index(i[1]),i[2]))
-            train_list = train_list_relabel
-        return train_list, len(id_set), len(train_list)
+            for i in data_list:
+                train_list_relabel.append((i[0],id_list.index(i[1]),i[2],i[3],i[4]))
+            data_list = train_list_relabel
+        return data_list, len(id_set), len(data_list)

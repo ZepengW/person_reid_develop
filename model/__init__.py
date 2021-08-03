@@ -91,7 +91,7 @@ class ModelManager:
         total_loss_array = np.zeros([1, batch_num])
         pids_l = []
         features_vis = []
-        for idx, (imgs, ids, _, _) in enumerate(dataloader):
+        for idx, (imgs, ids, _, _, masks) in enumerate(dataloader):
             self.optimizer.zero_grad()
 
             # extract body part features
