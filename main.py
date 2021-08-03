@@ -150,7 +150,7 @@ if __name__ == '__main__':
     with open(cfg_path) as f:
         cfg = f.read()
         yaml_cfg = yaml.safe_load(cfg)
-    logging.info(str(yaml_cfg))
+
 
     if not os.path.isdir('./output'):
         os.mkdir('./output')
@@ -161,6 +161,8 @@ if __name__ == '__main__':
     log_dir_name = init_logging(task_name=yaml_cfg.get('task-name', ''))
     # initial tensorboardX
     writer_tensorboardx = SummaryWriter(f'./output/log/{log_dir_name}')
+
+    logging.info(str(yaml_cfg))
 
     main(yaml_cfg, writer_tensorboardx)
 
