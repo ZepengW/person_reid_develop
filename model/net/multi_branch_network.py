@@ -15,6 +15,8 @@ class MbNetwork(nn.Module):
         #
         x_body = x[:,0,:,:,:]
         x_clothes = x[:,1,:,:,:]
+        x_clothes_shape = torch.einsum('c,nhw->nchw',torch.tensor([255,255,255]).to(masks.device),masks[:,1,:,:])
+        x_body += x_clothes_shape
         _,f_body = self.model_body(x_body)
         _,f_clothes = self.model_clothes(x_clothes)
         f_total = 0.8*f_body+0.2*f_clothes
