@@ -11,6 +11,7 @@ from utils.re_ranking import re_ranking
 from model.net.multi_branch_network import MbNetwork
 from tensorboardX import SummaryWriter
 
+
 class ModelManager:
     def __init__(self, cfg: dict, device, class_num=1000, writer: SummaryWriter = None):
         self.device = device
@@ -50,7 +51,7 @@ class ModelManager:
             params += [{"params": [value], "lr": self.lr, "weight_decay": self.weight_decay}]
         self.optimizer = getattr(torch.optim, cfg.get('optimzer', 'Adam'))(params)
 
-        #tensorboardX
+        # tensorboardX
         self.writer = writer
 
     @staticmethod
@@ -99,7 +100,7 @@ class ModelManager:
             # extract body part features
             imgs = imgs.to(self.device)
             masks = masks.to(self.device)
-            f = self.net(imgs,masks)
+            f = self.net(imgs, masks)
             ids = ids.to(self.device)
             loss_trip = self.lossesFunction['trip_weight'](f, ids)[0]
             total_loss = loss_trip
@@ -109,9 +110,9 @@ class ModelManager:
             total_loss.backward()
             self.optimizer.step()
 
-            #vis features
+            # vis features
             pids_l += ids.tolist()  # record pid for visualization
-            f = PCA_svd(f,3)
+            f = PCA_svd(f, 3)
             features_vis = features_vis + f.tolist()
 
         logging.info('[Epoch:{:0>4d}] LOSS=[total:{:.4f}]'
@@ -121,35 +122,39 @@ class ModelManager:
             self.writer.add_embedding(features_vis, metadata=pids_l, global_step=epoch, tag='train')
         self.save_model(self.net, self.model_name, epoch)
 
-    def test(self, queryLoader: DataLoader, galleryLoader: DataLoader, epoch = 0):
+    def test(self, queryLoader: DataLoader, galleryLoader: DataLoader, epoch=0):
         logging.info("begin to test")
         self.net.eval()
         gf = []
         gPids = np.array([], dtype=int)
         gCids = np.array([], dtype=int)
+        gClothesids = np.array([], dtype=int)
         logging.info("compute features of gallery samples")
         for idx, (imgs, pids, cids, clothes_ids, masks) in enumerate(galleryLoader):
             imgs = imgs.to(self.device)
             masks = masks.to(self.device)
             with torch.no_grad():
-                f_whole = self.net(imgs,masks)
+                f_whole = self.net(imgs, masks)
                 gf.append(f_whole)
                 gPids = np.concatenate((gPids, pids.numpy()), axis=0)
                 gCids = np.concatenate((gCids, cids.numpy()), axis=0)
+                gClothesids = np.concatenate((gClothesids, clothes_ids.numpy()), axis=0)
         gf = torch.cat(gf, dim=0)
 
         logging.info("compute features of query samples")
         qf = []
         qPids = np.array([], dtype=int)
         qCids = np.array([], dtype=int)
+        qClothesids = np.array([], dtype=int)
         for idx, (imgs, pids, cids, clothes_ids, masks) in enumerate(queryLoader):
             imgs = imgs.to(self.device)
             masks = masks.to(self.device)
             with torch.no_grad():
-                f_whole = self.net(imgs,masks)
+                f_whole = self.net(imgs, masks)
                 qf.append(f_whole)
                 qPids = np.concatenate((qPids, pids.numpy()), axis=0)
                 qCids = np.concatenate((qCids, cids.numpy()), axis=0)
+                qClothesids = np.concatenate((qClothesids, clothes_ids.numpy()), axis=0)
         qf = torch.cat(qf, dim=0)
 
         logging.info("compute rank list and score")
@@ -159,27 +164,39 @@ class ModelManager:
         # distmat.addmm_(qf, gf.t(),beta = 1, alpha = -2)
         # distmat = distmat.cpu().numpy()
         distmat = re_ranking(qf, gf, k1=20, k2=6, lambda_value=0.3)
-        cmc, mAP, mINP = eval_func(distmat, qPids, gPids, qCids, gCids)
-        logging.info("test result:[rank-1:{:.2%}],[rank-3:{:.2%}],[rank-5:{:.2%}],[rank-10:{:.2%}]"
-                     .format(cmc[0], cmc[2], cmc[4], cmc[9]))
-        logging.info("test result:[mAP:{:.2%}],[mINP:{:.2%}]".format(mAP, mINP))
+        # standard mode
+        cmc_s, mAP_s, mINP_s = eval_func(distmat, qPids, gPids, qCids, gCids)
+        # clothes changing mode
+        cmc_c, mAP_c, mINP_c = eval_func(distmat, qPids, gPids, qCids, gCids, q_clo_ids=qClothesids,
+                                         g_clo_ids=gClothesids)
+        logging.info(f'standard mode test result:[rank-1:{cmc_s[0]:.2%}],[rank-3:{cmc_s[2]:.2%}]'
+                     f',[rank-5:{cmc_s[4]:.2%}],[rank-10:{cmc_s[9]:.2%}]')
+        logging.info(f'standard mode test result:[mAP:{mAP_s:.2%}],[mINP:{mINP_s:.2%}]')
+        logging.info(f'clothes changing mode test result:[rank-1:{cmc_c[0]:.2%}],[rank-3:{cmc_c[2]:.2%}]'
+                     f',[rank-5:{cmc_c[4]:.2%}],[rank-10:{cmc_c[9]:.2%}]')
+        logging.info(f'clothes changing mode test result:[mAP:{mAP_c:.2%}],[mINP:{mINP_c:.2%}]')
         if self.writer is not None:
-            self.writer.add_scalar('test/rank-1', cmc[0], epoch)
-            self.writer.add_scalar('test/mAP', mAP, epoch)
-            self.writer.add_scalar('test/mINP', mINP, epoch)
-            for i, p in enumerate(cmc):
-                self.writer.add_scalar(f'test-cmc/e{epoch}',p,i)
+            self.writer.add_scalar('test-standard/rank-1', cmc_s[0], epoch)
+            self.writer.add_scalar('test-standard/mAP', mAP_s, epoch)
+            self.writer.add_scalar('test-standard/mINP', mINP_s, epoch)
+            for i, p in enumerate(cmc_s):
+                self.writer.add_scalar(f'test-standard/cmc/e{epoch}', p, i)
+            self.writer.add_scalar('test-changing/rank-1', cmc_c[0], epoch)
+            self.writer.add_scalar('test-changing/mAP', mAP_c, epoch)
+            self.writer.add_scalar('test-changing/mINP', mINP_c, epoch)
+            for i, p in enumerate(cmc_c):
+                self.writer.add_scalar(f'test-changing/cmc/e{epoch}', p, i)
             # feature visualization
-            features_test = torch.cat([gf,qf])
-            labels = [str(s)+'_g' for s in gPids.tolist()] + [str(s)+'_q' for s in qPids.tolist()]
+            features_test = torch.cat([gf, qf])
+            labels = [str(s) + '_g' for s in gPids.tolist()] + [str(s) + '_q' for s in qPids.tolist()]
             self.writer.add_embedding(features_test, metadata=labels, global_step=epoch, tag='test')
-
 
     def adjust_lr(self, epoch):
         lr = self.lr * (
                 0.1 ** np.sum(epoch >= np.array(self.lr_adjust)))
         for param_group in self.optimizer.param_groups:
             param_group['lr'] = lr
+
 
 def PCA_svd(X, k, center=True):
     n = X.size()[0]

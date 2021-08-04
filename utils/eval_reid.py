@@ -3,7 +3,7 @@
 import numpy as np
 
 
-def eval_func(distmat, q_pids, g_pids, q_camids, g_camids, max_rank=50):
+def eval_func(distmat, q_pids, g_pids, q_camids, g_camids, max_rank=50, q_clo_ids = None, g_clo_ids = None):
     """Evaluation with market1501 metric
         Key: for each query identity, its gallery images from the same camera view are discarded.
         """
@@ -26,7 +26,13 @@ def eval_func(distmat, q_pids, g_pids, q_camids, g_camids, max_rank=50):
 
         # remove gallery samples that have the same pid and camid with query
         order = indices[q_idx]
-        remove = (g_pids[order] == q_pid) & (g_camids[order] == q_camid)
+        if (g_clo_ids is not None) and (q_clo_ids is not None):
+            q_cloid = q_clo_ids[q_idx]
+            # remove gallery samples that have the same pid and camid and clothes id with query
+            remove = (g_pids[order] == q_pid) & ((g_camids[order] == q_camid) | (g_clo_ids[order] == q_cloid))
+        else:
+            # remove gallery samples that have the same pid and camid with query
+            remove = (g_pids[order] == q_pid) & (g_camids[order] == q_camid)
         keep = np.invert(remove)
         # new add for not delete sample with same pid and cid
         #list = [True] * np.shape(order)[0]
