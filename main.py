@@ -128,13 +128,13 @@ def init_logging(task_name=''):
     if not os.path.isdir(f'./output/log/{log_dir_name}'):
         os.mkdir(f'./output/log/{log_dir_name}')
     logging.basicConfig(filename=f'./output/log/{log_dir_name}/log.txt',
-                        level=logging.DEBUG,
+                        level=logging.INFO,
                         format='###%(levelname)s###[%(asctime)s]%(message)s',
                         datefmt='%Y-%m-%d %H:%M:%S')
     console = logging.StreamHandler()
     console.setLevel(logging.INFO)
     console.setFormatter(logging.Formatter('[%(asctime)s]%(message)s', datefmt='%Y-%m-%d %H:%M:%S'))
-    logging.getLogger('').addHandler(console)
+    logging.getLogger().addHandler(console)
     print(f'writing log to ./output/log/{log_dir_name}')
     return log_dir_name
 
