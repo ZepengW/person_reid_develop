@@ -9,7 +9,7 @@ from dataset.dataset_market import Market
 from dataset.dataset_msmt import MSMT17
 from dataset.dataset_mars import Mars
 from dataset.dataset_ltcc import LTCC
-from dataset.mask import read_person_mask
+from dataset.mask import get_person_contour_mask
 import numpy as np
 
 import logging
@@ -72,12 +72,12 @@ class DatasetImage(Dataset):
         p_id = item[1]
         cam_id = item[2]
         clothes_id = item[3]
-        mask_path = item[4]
+        masks_path = item[4]
         img = Image.open(img_path).convert('RGB')
         if self.transform is not None:
             img = self.transform(img)
 
-        mask = read_person_mask(mask_path)
+        mask = get_person_contour_mask(masks_path[0],masks_path[1])
         mask = torch.from_numpy(mask).float()
         if self.transform_mask is not None:
             mask = self.transform_mask(mask)

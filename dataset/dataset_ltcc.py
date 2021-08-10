@@ -50,7 +50,8 @@ class LTCC(object):
             clothes_id = int(file.split('_')[1])
             camera_id = int(file.split('_')[2].split('c')[1])
             mask_path = os.path.join(dir+'-mask',file)
-            data_list.append((img_path,p_id,camera_id,clothes_id,mask_path))
+            mask_contour_path = os.path.join(dir + '_rend', file)
+            data_list.append((img_path,p_id,camera_id,clothes_id,(mask_path,mask_contour_path)))
             id_set.add(p_id)
         # relabel id to continues
         if relabel:
