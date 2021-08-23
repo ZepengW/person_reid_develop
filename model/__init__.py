@@ -86,7 +86,7 @@ class ModelManager:
         torch.save(model.state_dict(), './output/' + name + '_' + str(epoch) + '.pkl')
         logging.info('save model success: ' + './output/' + name + '_' + str(epoch) + '.pkl')
 
-    def train(self, dataloader: DataLoader, epoch):
+    def train(self, dataloader: DataLoader, epoch, is_vis= False):
         logging.info("training epoch : " + str(epoch))
         self.adjust_lr(epoch)
         self.net.train()
@@ -112,17 +112,19 @@ class ModelManager:
 
             # vis features
             pids_l += ids.tolist()  # record pid for visualization
-            f = PCA_svd(f, 3)
-            features_vis = features_vis + f.tolist()
+            if is_vis:
+                f = PCA_svd(f, 3)
+                features_vis = features_vis + f.tolist()
 
         logging.info('[Epoch:{:0>4d}] LOSS=[total:{:.4f}]'
                      .format(epoch, np.mean(total_loss_array[0])))
         if self.writer is not None:
             self.writer.add_scalar('train/loss', np.mean(total_loss_array[0]), epoch)
-            self.writer.add_embedding(features_vis, metadata=pids_l, global_step=epoch, tag='train')
+            if is_vis:
+                self.writer.add_embedding(features_vis, metadata=pids_l, global_step=epoch, tag='train')
         self.save_model(self.net, self.model_name, epoch)
 
-    def test(self, queryLoader: DataLoader, galleryLoader: DataLoader, epoch=0):
+    def test(self, queryLoader: DataLoader, galleryLoader: DataLoader, epoch=0, is_vis= True):
         logging.info("begin to test")
         self.net.eval()
         gf = []
@@ -187,9 +189,10 @@ class ModelManager:
             for i, p in enumerate(cmc_c):
                 self.writer.add_scalar(f'test-changing/cmc/e{epoch}', p, i)
             # feature visualization
-            features_test = torch.cat([gf, qf])
-            labels = [str(s) + '_g' for s in gPids.tolist()] + [str(s) + '_q' for s in qPids.tolist()]
-            self.writer.add_embedding(features_test, metadata=labels, global_step=epoch, tag='test')
+            if is_vis:
+                features_test = torch.cat([gf, qf])
+                labels = [str(s) + '_g' for s in gPids.tolist()] + [str(s) + '_q' for s in qPids.tolist()]
+                self.writer.add_embedding(features_test, metadata=labels, global_step=epoch, tag='test')
 
     def adjust_lr(self, epoch):
         lr = self.lr * (

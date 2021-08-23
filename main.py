@@ -108,8 +108,9 @@ def main(config, writer_tensorboardX):
         logging.info("prepare to train from epoch[{0}] to epoch[{1}]".format(model.trained_epoches,
                                                                              model_config.get('epoch', 64) - 1))
         for i in range(model.trained_epoches, model_config.get('epoch', 64)):
-            model.train(loader_train_source, i)
-            if i % 10 == 0:
+            is_vis = True if (i % 20 == 0 or i == model_config.get('epoch', 64) - 1) else False
+            model.train(loader_train_source, i, is_vis)
+            if i % 10 == 0 or i == model_config.get('epoch', 64) - 1:
                 model.test(loader_query_source, loader_gallery_source, epoch=i)
 
     logging.info("finish!")
