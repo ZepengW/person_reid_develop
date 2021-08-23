@@ -209,10 +209,11 @@ class ResNet(nn.Module):
         x = self.layer2(x)
         x = self.layer3(x)
         x = self.layer4(x)
+        f = x
 
         x = self.avgpool(x)
-        f = torch.flatten(x, 1)
-        x = self.fc(f)
+        x = torch.flatten(x, 1)
+        x = self.fc(x)
 
         return x, f
 

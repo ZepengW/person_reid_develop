@@ -20,7 +20,7 @@ class ModelManager:
 
         # model load
         # add your own network here
-        self.net = MbNetwork()
+        self.net = MbNetwork(num_classes=class_num)
 
         # Multi-GPU Set
         if torch.cuda.device_count() > 1:
@@ -36,7 +36,7 @@ class ModelManager:
 
         # loss function
         self.lossesFunction = {}
-        self.lossesFunction['xent_global'] = nn.CrossEntropyLoss()
+        self.lossesFunction['xent'] = nn.CrossEntropyLoss()
         self.lossesFunction['trip_weight'] = WeightedRegularizedTriplet()
 
         # optim
@@ -91,7 +91,7 @@ class ModelManager:
         self.adjust_lr(epoch)
         self.net.train()
         batch_num = len(dataloader)
-        total_loss_array = np.zeros([1, batch_num])
+        total_loss_array = np.zeros([3, batch_num])
         pids_l = []
         features_vis = []
         for idx, (imgs, ids, _, _, masks) in enumerate(dataloader):
@@ -100,12 +100,15 @@ class ModelManager:
             # extract body part features
             imgs = imgs.to(self.device)
             masks = masks.to(self.device)
-            f = self.net(imgs, masks)
+            c, f = self.net(imgs, masks)
             ids = ids.to(self.device)
             loss_trip = self.lossesFunction['trip_weight'](f, ids)[0]
-            total_loss = loss_trip
+            loss_xent = self.lossesFunction['xent'](c, ids)
+            total_loss = loss_trip + loss_xent
 
             total_loss_array[0][idx] = (total_loss.cpu())
+            total_loss_array[1][idx] = (loss_xent.cpu())
+            total_loss_array[2][idx] = (loss_trip.cpu())
             # update model
             total_loss.backward()
             self.optimizer.step()
@@ -120,6 +123,8 @@ class ModelManager:
                      .format(epoch, np.mean(total_loss_array[0])))
         if self.writer is not None:
             self.writer.add_scalar('train/loss', np.mean(total_loss_array[0]), epoch)
+            self.writer.add_scalar('train/loss-xent', np.mean(total_loss_array[1]), epoch)
+            self.writer.add_scalar('train/loss-trip', np.mean(total_loss_array[2]), epoch)
             if is_vis:
                 self.writer.add_embedding(features_vis, metadata=pids_l, global_step=epoch, tag='train')
         self.save_model(self.net, self.model_name, epoch)
