@@ -1,17 +1,22 @@
 import torch.nn as nn
 import torch
-from model.net.resnet import resnet50
+from model.net.resnet import resnet50, resnet101
 
 class MbNetwork(nn.Module):
 
     def __init__(self, pretrained=True):
         super(MbNetwork, self).__init__()
-        self.model_body = resnet50(pretrained=pretrained)
+        self.model_body = resnet101(pretrained=pretrained)
         self.model_clothes = resnet50(pretrained=pretrained)
-        self.model_contour = resnet50(pretrained=pretrained)
+        #self.model_contour = resnet50(pretrained=pretrained)
+        self.model_total = resnet101(pretrained=pretrained)
+        # fuse features by layer
+        #self.layer_fuse =  
 
     def forward(self,x,masks):
         # x : (batch, body_part_channel, c, h, w)
+        _, f_whole = self.model_total(x)
+
         x = torch.einsum('nchw,nbhw->nbchw', x, masks)
         #
         x_body = x[:,0,:,:,:]
@@ -23,6 +28,6 @@ class MbNetwork(nn.Module):
         input_contour = input_contour.repeat(1,3,1,1)
         _, f_body = self.model_body(x_body)
         _, f_clothes = self.model_clothes(x_clothes)
-        _, f_contour = self.model_contour(input_contour)
-        f_total = 0.4*f_body+0.2*f_clothes+0.4*f_contour
+        #_, f_contour = self.model_contour(input_contour)
+        f_total = torch.cat((f_whole,f_body),dim=1)
         return f_total
