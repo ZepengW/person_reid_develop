@@ -47,6 +47,7 @@ def main(config, writer_tensorboardX):
     dataset_type = dataset_config.get('type', 'image')
     get_dataset = getattr(dataset_manager, 'get_dataset_' + dataset_type)
 
+    vis_bool = config.get('vis', False)
     if 'train' == mode:
         logging.info("loading train data")
         loader_train_source = DataLoader(
@@ -60,7 +61,7 @@ def main(config, writer_tensorboardX):
         logging.info("prepare to train from epoch[{0}] to epoch[{1}]".format(model.trained_epoches,
                                                                              model_config.get('epoch', 64) - 1))
         for i in range(model.trained_epoches, model_config.get('epoch', 64)):
-            model.train(loader_train_source, i)
+            model.train(loader_train_source, i, is_vis= vis_bool)
     elif 'test' == mode:
         logging.info("loading test data")
         loader_gallery_source = DataLoader(
@@ -78,7 +79,7 @@ def main(config, writer_tensorboardX):
             shuffle=True
         )
         logging.info("load test data finish")
-        model.test(loader_query_source, loader_gallery_source)
+        model.test(loader_query_source, loader_gallery_source, is_vis= vis_bool)
     elif 'train_test' == mode:
         logging.info("loading train data")
         loader_train_source = DataLoader(
@@ -109,9 +110,10 @@ def main(config, writer_tensorboardX):
                                                                              model_config.get('epoch', 64) - 1))
         for i in range(model.trained_epoches, model_config.get('epoch', 64)):
             is_vis = True if (i % 20 == 0 or i == model_config.get('epoch', 64) - 1) else False
+            is_vis = is_vis and vis_bool
             model.train(loader_train_source, i, is_vis)
             if i % 10 == 0 or i == model_config.get('epoch', 64) - 1:
-                model.test(loader_query_source, loader_gallery_source, epoch=i)
+                model.test(loader_query_source, loader_gallery_source, epoch=i, is_vis = vis_bool)
 
     logging.info("finish!")
 
