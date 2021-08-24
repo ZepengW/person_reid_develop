@@ -6,21 +6,27 @@ class MbNetwork(nn.Module):
 
     def __init__(self, pretrained=True, num_classes = 1000):
         super(MbNetwork, self).__init__()
-        self.model_body = resnet101(pretrained=pretrained)
+        self.model_body = resnet50(pretrained=pretrained)
         self.model_clothes = resnet50(pretrained=pretrained)
         #self.model_contour = resnet50(pretrained=pretrained)
-        self.model_total = resnet101(pretrained=pretrained)
+        self.model_total = resnet50(pretrained=pretrained)
         # fuse features by layer
-        self.layer_fuse =  nn.Conv2d(2048*2, 1024, kernel_size=1, stride=1, bias=False)
+        self.layer_fuse =  nn.Conv2d(2048*3, 2048, kernel_size=1, stride=1, bias=False)
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
-        self.class_layer = nn.Linear(1024, num_classes)
+        self.class_layer = nn.Linear(2048, num_classes)
 
     def forward(self,x,masks):
         # x : (batch, body_part_channel, c, h, w)
         _, f_whole = self.model_total(x)
 
+        noises = torch.randint(0,256,x.shape).to(x.device)   # n(batch_size) * c(rgb channel) * h * w
         x = torch.einsum('nchw,nbhw->nbchw', x, masks)
-        #
+
+        # append noise to zero space
+        masks_rev = (masks == 0).type(torch.float)
+        noises = torch.einsum('nchw,nbhw->nbchw', noises, masks_rev)
+        x = x + noises
+        
         x_body = x[:,0,:,:,:]
         x_clothes = x[:,1,:,:,:]
         input_contour = masks[:,2,:,:]
@@ -33,7 +39,7 @@ class MbNetwork(nn.Module):
         #_, f_contour = self.model_contour(input_contour)
 
         # feature fusion
-        f_total = torch.cat((f_whole,f_body),dim=1)
+        f_total = torch.cat((f_whole,f_body,f_clothes),dim=1)
         f_total = self.layer_fuse(f_total)
         f_total = self.avgpool(f_total)
         f_total = torch.flatten(f_total, 1)
