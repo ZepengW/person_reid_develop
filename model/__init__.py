@@ -8,7 +8,8 @@ from utils.triplet_loss import CrossEntropyLabelSmooth, WeightedRegularizedTripl
 from utils.center_loss import CenterLoss
 import numpy as np
 from utils.re_ranking import re_ranking
-from model.net.multi_branch_network import MbNetwork
+#from model.net.multi_branch_network import MbNetwork
+from model.net.person_transformer import PersonTransformer
 from tensorboardX import SummaryWriter
 
 
@@ -20,7 +21,8 @@ class ModelManager:
 
         # model load
         # add your own network here
-        self.net = MbNetwork(num_classes=class_num)
+        self.net = PersonTransformer(num_classes=class_num,camera_num=12,
+                                     vit_pretrained_path=cfg.get('vit-pretrained-path',None))
 
         # Multi-GPU Set
         if torch.cuda.device_count() > 1:
@@ -94,16 +96,24 @@ class ModelManager:
         total_loss_array = np.zeros([3, batch_num])
         pids_l = []
         features_vis = []
-        for idx, (imgs, ids, _, _, masks) in enumerate(dataloader):
+        for idx, (imgs, ids, cam_id, _, masks) in enumerate(dataloader):
             self.optimizer.zero_grad()
 
             # extract body part features
             imgs = imgs.to(self.device)
             masks = masks.to(self.device)
-            c, f = self.net(imgs, masks)
+            cam_id = cam_id.to(self.device)
+            scores, feats = self.net(imgs, cam_id)
             ids = ids.to(self.device)
-            loss_trip = self.lossesFunction['trip_weight'](f, ids)[0]
-            loss_xent = self.lossesFunction['xent'](c, ids)
+
+            # compute loss
+            loss_trip = 0
+            loss_xent = 0
+            for i in range(0,len(scores)):
+                loss_xent += self.lossesFunction['xent'](scores[i],ids)
+            for i in range(0,len(feats)):
+                loss_trip += self.lossesFunction['trip_weight'](feats[i], ids)[0]
+
             total_loss = loss_trip + loss_xent
 
             total_loss_array[0][idx] = (total_loss.cpu())
@@ -116,7 +126,7 @@ class ModelManager:
             # vis features
             pids_l += ids.tolist()  # record pid for visualization
             if is_vis:
-                f = PCA_svd(f, 3)
+                f = PCA_svd(feats[0], 3)
                 features_vis = features_vis + f.tolist()
 
         logging.info('[Epoch:{:0>4d}] LOSS=[total:{:.4f}]'
@@ -141,8 +151,8 @@ class ModelManager:
             imgs = imgs.to(self.device)
             masks = masks.to(self.device)
             with torch.no_grad():
-                f_whole = self.net(imgs, masks)
-                gf.append(f_whole)
+                f_whole = self.net(imgs, cids)
+                gf.append(f_whole[0])
                 gPids = np.concatenate((gPids, pids.numpy()), axis=0)
                 gCids = np.concatenate((gCids, cids.numpy()), axis=0)
                 gClothesids = np.concatenate((gClothesids, clothes_ids.numpy()), axis=0)
@@ -157,8 +167,8 @@ class ModelManager:
             imgs = imgs.to(self.device)
             masks = masks.to(self.device)
             with torch.no_grad():
-                f_whole = self.net(imgs, masks)
-                qf.append(f_whole)
+                f_whole = self.net(imgs, cids)
+                qf.append(f_whole[0])
                 qPids = np.concatenate((qPids, pids.numpy()), axis=0)
                 qCids = np.concatenate((qCids, cids.numpy()), axis=0)
                 qClothesids = np.concatenate((qClothesids, clothes_ids.numpy()), axis=0)
