@@ -196,13 +196,13 @@ class ModelManager:
             self.writer.add_scalar('test-standard/rank-1', cmc_s[0], epoch)
             self.writer.add_scalar('test-standard/mAP', mAP_s, epoch)
             self.writer.add_scalar('test-standard/mINP', mINP_s, epoch)
-            for i, p in enumerate(cmc_s):
-                self.writer.add_scalar(f'test-standard/cmc/e{epoch}', p, i)
+            # for i, p in enumerate(cmc_s):
+            #     self.writer.add_scalar(f'test-standard/cmc/e{epoch}', p, i)
             self.writer.add_scalar('test-changing/rank-1', cmc_c[0], epoch)
             self.writer.add_scalar('test-changing/mAP', mAP_c, epoch)
             self.writer.add_scalar('test-changing/mINP', mINP_c, epoch)
-            for i, p in enumerate(cmc_c):
-                self.writer.add_scalar(f'test-changing/cmc/e{epoch}', p, i)
+            # for i, p in enumerate(cmc_c):
+            #     self.writer.add_scalar(f'test-changing/cmc/e{epoch}', p, i)
             # feature visualization
             if is_vis:
                 features_test = torch.cat([gf, qf])
