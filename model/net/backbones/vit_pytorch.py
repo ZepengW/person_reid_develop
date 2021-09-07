@@ -287,13 +287,69 @@ class PatchEmbed_overlap(nn.Module):
         x = x.flatten(2).transpose(1, 2) # [64, 8, 768]
         return x
 
+class PatchEmbed_overlap_MaskEmbed(nn.Module):
+    """ Image to Patch Embedding with overlapping patches
+    """
+    def __init__(self, img_size=224, patch_size=16, stride_size=20, in_chans=3, embed_dim=768):
+        super().__init__()
+        img_size = to_2tuple(img_size)
+        patch_size = to_2tuple(patch_size)
+        stride_size_tuple = to_2tuple(stride_size)
+        self.num_x = (img_size[1] - patch_size[1]) // stride_size_tuple[1] + 1
+        self.num_y = (img_size[0] - patch_size[0]) // stride_size_tuple[0] + 1
+        print('using stride: {}, and patch number is num_y{} * num_x{}'.format(stride_size, self.num_y, self.num_x))
+        num_patches = self.num_x * self.num_y
+        self.img_size = img_size
+        self.patch_size = patch_size
+        self.num_patches = num_patches
+        self.stride_size = stride_size_tuple
+        self.embed_dim = embed_dim
+
+        self.proj = nn.Conv2d(in_chans, embed_dim, kernel_size=patch_size, stride=stride_size)
+        for m in self.modules():
+            if isinstance(m, nn.Conv2d):
+                n = m.kernel_size[0] * m.kernel_size[1] * m.out_channels
+                m.weight.data.normal_(0, math.sqrt(2. / n))
+            elif isinstance(m, nn.BatchNorm2d):
+                m.weight.data.fill_(1)
+                m.bias.data.zero_()
+            elif isinstance(m, nn.InstanceNorm2d):
+                m.weight.data.fill_(1)
+                m.bias.data.zero_()
+
+    def forward(self, x, mask, mask_embed):
+        B, C, H, W = x.shape
+        mask_embed_in = torch.zeros(B, self.embed_dim, self.num_y, self.num_x).cuda()
+        for b in range(0,B):
+            for i in range(0,self.num_y):
+                for j in range(0, self.num_x):
+                    i_b = i*self.stride_size[0]
+                    i_e = i*self.stride_size[0]+self.patch_size[0]
+                    j_b = j*self.stride_size[1]
+                    j_e = j*self.stride_size[1]+self.patch_size[1]
+                    count = torch.bincount(mask[b,i_b:i_e,j_b:j_e].reshape(-1))
+                    mask_id = torch.argmax(count)
+                    if mask_id == 0 and len(count) > 1:
+                        # flag patch to background label only if pixels in this patch are all background
+                        mask_id = torch.argmax(count[1:]) + 1
+                    mask_embed_in[b,:,i,j] = mask_embed[mask_id]
+        # FIXME look at relaxing size constraints
+        assert H == self.img_size[0] and W == self.img_size[1], \
+            f"Input image size ({H}*{W}) doesn't match model ({self.img_size[0]}*{self.img_size[1]})."
+        x = self.proj(x)
+        x += mask_embed_in
+
+        x = x.flatten(2).transpose(1, 2) # [64, 8, 768]
+        return x
+
 
 class TransReID(nn.Module):
     """ Transformer-based Object Re-Identification
     """
     def __init__(self, img_size=224, patch_size=16, stride_size=16, in_chans=3, num_classes=1000, embed_dim=768, depth=12,
                  num_heads=12, mlp_ratio=4., qkv_bias=False, qk_scale=None, drop_rate=0., attn_drop_rate=0., camera=0, view=0,
-                 drop_path_rate=0., hybrid_backbone=None, norm_layer=nn.LayerNorm, local_feature=False, sie_xishu =1.0):
+                 drop_path_rate=0., hybrid_backbone=None, norm_layer=nn.LayerNorm, local_feature=False, sie_xishu =1.0,
+                 mask_num = 20):
         super().__init__()
         self.num_classes = num_classes
         self.num_features = self.embed_dim = embed_dim  # num_features for consistency with other models
@@ -302,7 +358,7 @@ class TransReID(nn.Module):
             self.patch_embed = HybridEmbed(
                 hybrid_backbone, img_size=img_size, in_chans=in_chans, embed_dim=embed_dim)
         else:
-            self.patch_embed = PatchEmbed_overlap(
+            self.patch_embed = PatchEmbed_overlap_MaskEmbed(
                 img_size=img_size, patch_size=patch_size, stride_size=stride_size, in_chans=in_chans,
                 embed_dim=embed_dim)
 
@@ -310,6 +366,9 @@ class TransReID(nn.Module):
 
         self.cls_token = nn.Parameter(torch.zeros(1, 1, embed_dim))
         self.pos_embed = nn.Parameter(torch.zeros(1, num_patches + 1, embed_dim))
+        # Initialize Mask Embedding
+        self.mask_embed = nn.Parameter(torch.zeros(mask_num,embed_dim))
+
         self.cam_num = camera
         self.view_num = view
         self.sie_xishu = sie_xishu
@@ -349,6 +408,7 @@ class TransReID(nn.Module):
         self.fc = nn.Linear(embed_dim, num_classes) if num_classes > 0 else nn.Identity()
         trunc_normal_(self.cls_token, std=.02)
         trunc_normal_(self.pos_embed, std=.02)
+        trunc_normal_(self.mask_embed,std=.02)
 
         self.apply(self._init_weights)
 
@@ -372,9 +432,10 @@ class TransReID(nn.Module):
         self.num_classes = num_classes
         self.fc = nn.Linear(self.embed_dim, num_classes) if num_classes > 0 else nn.Identity()
 
-    def forward_features(self, x, camera_id, view_id):
+    def forward_features(self, x, camera_id, view_id, mask):
         B = x.shape[0]
-        x = self.patch_embed(x)
+        # mask shape except: [B,H,W]
+        x = self.patch_embed(x,mask,self.mask_embed)
 
         cls_tokens = self.cls_token.expand(B, -1, -1)  # stole cls_tokens impl from Phil Wang, thanks
         x = torch.cat((cls_tokens, x), dim=1)
@@ -387,6 +448,8 @@ class TransReID(nn.Module):
             x = x + self.pos_embed + self.sie_xishu * self.sie_embed[view_id]
         else:
             x = x + self.pos_embed
+
+
 
         x = self.pos_drop(x)
 
@@ -403,9 +466,12 @@ class TransReID(nn.Module):
 
             return x[:, 0]
 
-    def forward(self, x, cam_label=None, view_label=None):
-        x = self.forward_features(x, cam_label, view_label)
+    def forward(self, x, mask, cam_label=None, view_label=None):
+        x = self.forward_features(x, cam_label, view_label, mask)
         return x
+
+    def calculate_mask_embedding(self, mask):
+        pass
 
     def load_param(self, model_path):
         param_dict = torch.load(model_path, map_location='cpu')
@@ -530,3 +596,8 @@ def trunc_normal_(tensor, mean=0., std=1., a=-2., b=2.):
         >>> nn.init.trunc_normal_(w)
     """
     return _no_grad_trunc_normal_(tensor, mean, std, a, b)
+
+if __name__ == '__main__':
+    pos_embed = nn.Parameter(torch.zeros(1, 16 + 1, 768))
+    trunc_normal_(pos_embed, std=.02)
+    print(pos_embed)

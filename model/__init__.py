@@ -103,7 +103,7 @@ class ModelManager:
             imgs = imgs.to(self.device)
             masks = masks.to(self.device)
             cam_id = cam_id.to(self.device)
-            scores, feats = self.net(imgs, cam_id)
+            scores, feats = self.net(imgs, masks,cam_id)
             ids = ids.to(self.device)
 
             # compute loss
@@ -151,7 +151,7 @@ class ModelManager:
             imgs = imgs.to(self.device)
             masks = masks.to(self.device)
             with torch.no_grad():
-                f_whole = self.net(imgs, cids)
+                f_whole = self.net(imgs, masks,cids)
                 gf.append(f_whole[0])
                 gPids = np.concatenate((gPids, pids.numpy()), axis=0)
                 gCids = np.concatenate((gCids, cids.numpy()), axis=0)
@@ -167,7 +167,7 @@ class ModelManager:
             imgs = imgs.to(self.device)
             masks = masks.to(self.device)
             with torch.no_grad():
-                f_whole = self.net(imgs, cids)
+                f_whole = self.net(imgs, masks,cids)
                 qf.append(f_whole[0])
                 qPids = np.concatenate((qPids, pids.numpy()), axis=0)
                 qCids = np.concatenate((qCids, cids.numpy()), axis=0)

@@ -57,9 +57,9 @@ class PersonTransformer(nn.Module):
         if vit_pretrained_path is not None:
             self.vit_backbone.load_param(vit_pretrained_path)
 
-    def forward(self, x, cam_label= None, view_label=None):  # label is unused if self.cos_layer == 'no'
+    def forward(self, x, mask, cam_label= None, view_label=None):  # label is unused if self.cos_layer == 'no'
 
-        features = self.vit_backbone(x, cam_label=cam_label, view_label=view_label)
+        features = self.vit_backbone(x, mask,cam_label=cam_label, view_label=view_label)
 
         # global branch
         b1_feat = self.b1(features) # [64, 129, 768]
