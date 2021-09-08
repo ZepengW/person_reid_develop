@@ -152,7 +152,7 @@ class ModelManager:
             masks = masks.to(self.device)
             with torch.no_grad():
                 f_whole = self.net(imgs, masks,cids)
-                gf.append(f_whole[0])
+                gf.append(f_whole)
                 gPids = np.concatenate((gPids, pids.numpy()), axis=0)
                 gCids = np.concatenate((gCids, cids.numpy()), axis=0)
                 gClothesids = np.concatenate((gClothesids, clothes_ids.numpy()), axis=0)
@@ -168,7 +168,7 @@ class ModelManager:
             masks = masks.to(self.device)
             with torch.no_grad():
                 f_whole = self.net(imgs, masks,cids)
-                qf.append(f_whole[0])
+                qf.append(f_whole)
                 qPids = np.concatenate((qPids, pids.numpy()), axis=0)
                 qCids = np.concatenate((qCids, cids.numpy()), axis=0)
                 qClothesids = np.concatenate((qClothesids, clothes_ids.numpy()), axis=0)
