@@ -21,7 +21,7 @@ class ModelManager:
 
         # model load
         # add your own network here
-        self.net = PersonTransformer(num_classes=class_num,camera_num=12,
+        self.net = PersonTransformer(num_classes=class_num,camera_num=cfg.get('camera-num'),
                                      vit_pretrained_path=cfg.get('vit-pretrained-path',None))
 
         # Multi-GPU Set

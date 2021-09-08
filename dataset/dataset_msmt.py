@@ -40,10 +40,10 @@ class MSMT17(object):
                 continue
             img_path = os.path.join(dir,file)
             pid = int(file.split('_')[0])
-            cid = int((file.split('c')[1]).split('_')[0])
+            cid = int((file.split('c')[1]).split('_')[0]) - 1
             clothes_id = -1
-            path_mask_schp = os.path.join(dir+'-mask',file)
-            train_list.append((img_path,pid,cid,clothes_id,(path_mask_schp)))
+            path_mask_schp = os.path.join(dir+'-mask',os.path.splitext(file)[0]+'.png')
+            train_list.append((img_path,pid,cid,clothes_id,(path_mask_schp,)))
             id_set.add(pid)
         # relabel id to continues
         if relabel:

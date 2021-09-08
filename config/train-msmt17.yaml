@@ -10,6 +10,7 @@ network-params:
   continue_train: False
   optimzer: SGD
   vit-pretrained-path: ./pretrained/jx_vit_base_p16_224-80ecf9dd.pth
+  camera-num: 15
 
 dataset:
   dataset_name: msmt17
@@ -18,5 +19,5 @@ dataset:
     - 256
     - 128
   num_workers: 8
-  batch_size: 64
+  batch_size: 4
   type: image

@@ -10,6 +10,7 @@ network-params:
   continue_train: True
   optimzer: SGD
   vit-pretrained-path: ./pretrained/jx_vit_base_p16_224-80ecf9dd.pth
+  camera-num: 12
 
 dataset:
   dataset_name: ltcc
