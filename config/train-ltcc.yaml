@@ -1,18 +1,14 @@
 mode: train_test
 gpu: [0]
+task-name: MaskFormer-v1-ltcc
 
 network-params:
-  name: network-ltcc
-  lr: 0.0001
-  lr_adjust:
-    - 20
-    - 40
-    - 60
-    - 90
+  name: MaskFormer-v1-ltcc-2
+  lr: 0.00001
   weight_decay: 0.0003
   epoch: 64
   continue_train: True
-  optimzer: Adam
+  optimzer: SGD
   vit-pretrained-path: ./pretrained/jx_vit_base_p16_224-80ecf9dd.pth
 
 dataset:
@@ -22,6 +18,6 @@ dataset:
     - 256
     - 128
   num_workers: 8
-  batch_size: 2
+  batch_size: 64
   seq_len: 30
   type: image
