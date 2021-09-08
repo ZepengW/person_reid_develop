@@ -41,7 +41,9 @@ class MSMT17(object):
             img_path = os.path.join(dir,file)
             pid = int(file.split('_')[0])
             cid = int((file.split('c')[1]).split('_')[0])
-            train_list.append((img_path,pid,cid))
+            clothes_id = -1
+            path_mask_schp = os.path.join(dir+'-mask',file)
+            train_list.append((img_path,pid,cid,clothes_id,(path_mask_schp)))
             id_set.add(pid)
         # relabel id to continues
         if relabel:
@@ -49,6 +51,6 @@ class MSMT17(object):
             id_list.sort()
             train_list_relabel = []
             for i in train_list:
-                train_list_relabel.append((i[0],id_list.index(i[1]),i[2]))
+                train_list_relabel.append((i[0],id_list.index(i[1]),i[2],i[3],i[4]))
             train_list = train_list_relabel
         return train_list, len(id_set), len(train_list)
