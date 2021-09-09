@@ -20,6 +20,7 @@ class LTCC(object):
         train_dir = os.path.join(self.dataset_dir,'train')
         test_dir = os.path.join(self.dataset_dir,'test')
         query_dir = os.path.join(self.dataset_dir,'query')
+        self.patch_mask_dir = os.path.join(self.dataset_dir,'vit_patch_mask')
 
         self.train, num_train_pids, num_train_imgs = self._process_data(train_dir,relabel=True)
         self.test, num_test_pids, num_test_imgs = self._process_data(test_dir)
@@ -51,7 +52,8 @@ class LTCC(object):
             camera_id = int(file.split('_')[2].split('c')[1]) - 1
             mask_path = os.path.join(dir+'-mask',file)
             mask_contour_path = os.path.join(dir + '_rend', file)
-            data_list.append((img_path,p_id,camera_id,clothes_id,(mask_path,mask_contour_path)))
+            path_patch_mask = os.path.join(self.patch_mask_dir,os.path.splitext(file)[0]+'.pt')
+            data_list.append((img_path,p_id,camera_id,clothes_id,(path_patch_mask,mask_path,mask_contour_path)))
             id_set.add(p_id)
         # relabel id to continues
         if relabel:

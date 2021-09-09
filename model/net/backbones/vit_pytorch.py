@@ -317,22 +317,10 @@ class PatchEmbed_overlap_MaskEmbed(nn.Module):
                 m.weight.data.fill_(1)
                 m.bias.data.zero_()
 
-    def forward(self, x, mask, mask_embed):
+    def forward(self, x, mask_patch, mask_embed):
         B, C, H, W = x.shape
-        mask_embed_in = torch.zeros(B, self.embed_dim, self.num_y, self.num_x).cuda()
-        for b in range(0,B):
-            for i in range(0,self.num_y):
-                for j in range(0, self.num_x):
-                    i_b = i*self.stride_size[0]
-                    i_e = i*self.stride_size[0]+self.patch_size[0]
-                    j_b = j*self.stride_size[1]
-                    j_e = j*self.stride_size[1]+self.patch_size[1]
-                    count = torch.bincount(mask[b,i_b:i_e,j_b:j_e].reshape(-1))
-                    mask_id = torch.argmax(count)
-                    if mask_id == 0 and len(count) > 1:
-                        # flag patch to background label only if pixels in this patch are all background
-                        mask_id = torch.argmax(count[1:]) + 1
-                    mask_embed_in[b,:,i,j] = mask_embed[mask_id]
+        mask_embed_in = mask_embed[mask_patch]
+        mask_embed_in = mask_embed_in.permute([0,3,1,2])
         # FIXME look at relaxing size constraints
         assert H == self.img_size[0] and W == self.img_size[1], \
             f"Input image size ({H}*{W}) doesn't match model ({self.img_size[0]}*{self.img_size[1]})."

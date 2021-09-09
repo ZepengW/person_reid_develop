@@ -9,6 +9,7 @@ class MSMT17(object):
         train_dir = os.path.join(self.dataset_dir,'bounding_box_train')
         test_dir = os.path.join(self.dataset_dir,'bounding_box_test')
         query_dir = os.path.join(self.dataset_dir,'query')
+        self.patch_mask_dir = os.path.join(self.dataset_dir,'vit_patch_mask')
 
         train_list, num_train_pids, num_train_imgs = self._process_data(train_dir,relabel=True)
         test_list, num_test_pids, num_test_imgs = self._process_data(test_dir)
@@ -42,8 +43,9 @@ class MSMT17(object):
             pid = int(file.split('_')[0])
             cid = int((file.split('c')[1]).split('_')[0]) - 1
             clothes_id = -1
-            path_mask_schp = os.path.join(dir+'-mask',os.path.splitext(file)[0]+'.png')
-            train_list.append((img_path,pid,cid,clothes_id,(path_mask_schp,)))
+            #path_mask_schp = os.path.join(dir+'-mask',os.path.splitext(file)[0]+'.png')
+            path_patch_mask = os.path.join(self.patch_mask_dir,os.path.splitext(file)[0]+'.pt')
+            train_list.append((img_path,pid,cid,clothes_id,(path_patch_mask,)))
             id_set.add(pid)
         # relabel id to continues
         if relabel:

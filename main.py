@@ -54,7 +54,7 @@ def main(config, writer_tensorboardX):
             get_dataset('train', transform=t, transform_mask=t_mask),
             batch_size=dataset_config.get('batch_size', 16),
             num_workers=dataset_config.get('num_workers', 8),
-            drop_last=False,
+            drop_last=True,
             shuffle=True
         )
         logging.info("load train data finish")
@@ -86,7 +86,7 @@ def main(config, writer_tensorboardX):
             get_dataset('train', transform=t, transform_mask=t_mask),
             batch_size=dataset_config.get('batch_size', 16),
             num_workers=dataset_config.get('num_workers', 8),
-            drop_last=False,
+            drop_last=True,
             shuffle=True
         )
         logging.info("load train data finish")

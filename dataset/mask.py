@@ -1,6 +1,7 @@
 import os
 from PIL import Image
 import numpy as np
+import torch
 
 MASK_MAP = [
     # body
@@ -56,6 +57,10 @@ def get_person_contour_mask(mask_person_path, mask_contour_path):
 
 def get_person_semantics_mask(mask_person_path):
     return read_person_mask(mask_person_path,False)
+
+def get_vit_patch_mask(patch_mask_path):
+    patch_mask = torch.load(patch_mask_path)
+    return patch_mask
 
 if __name__ == '__main__':
     mask = read_person_mask('../../DATASET/LTCC_ReID/train-mask/000_1_c2_001038.png')

@@ -152,6 +152,7 @@ class ModelManager:
             masks = masks.to(self.device)
             with torch.no_grad():
                 f_whole = self.net(imgs, masks,cids)
+                f_whole = f_whole.cpu()
                 gf.append(f_whole)
                 gPids = np.concatenate((gPids, pids.numpy()), axis=0)
                 gCids = np.concatenate((gCids, cids.numpy()), axis=0)
@@ -168,6 +169,7 @@ class ModelManager:
             masks = masks.to(self.device)
             with torch.no_grad():
                 f_whole = self.net(imgs, masks,cids)
+                f_whole = f_whole.cpu()
                 qf.append(f_whole)
                 qPids = np.concatenate((qPids, pids.numpy()), axis=0)
                 qCids = np.concatenate((qCids, cids.numpy()), axis=0)
@@ -175,32 +177,32 @@ class ModelManager:
         qf = torch.cat(qf, dim=0)
 
         logging.info("compute rank list and score")
-        # m, n = qf.shape[0], gf.shape[0]
-        # distmat = torch.pow(qf, 2).sum(dim=1, keepdim=True).expand(m, n) + \
-        #           torch.pow(gf, 2).sum(dim=1, keepdim=True).expand(n, m).t()
-        # distmat.addmm_(qf, gf.t(),beta = 1, alpha = -2)
-        # distmat = distmat.cpu().numpy()
-        distmat = re_ranking(qf, gf, k1=20, k2=6, lambda_value=0.3)
+        m, n = qf.shape[0], gf.shape[0]
+        distmat = torch.pow(qf, 2).sum(dim=1, keepdim=True).expand(m, n) + \
+                  torch.pow(gf, 2).sum(dim=1, keepdim=True).expand(n, m).t()
+        distmat.addmm_(qf, gf.t(),beta = 1, alpha = -2)
+        distmat = distmat.cpu().numpy()
+        #distmat = re_ranking(qf, gf, k1=20, k2=6, lambda_value=0.3)
         # standard mode
         cmc_s, mAP_s, mINP_s = eval_func(distmat, qPids, gPids, qCids, gCids)
         # clothes changing mode
-        cmc_c, mAP_c, mINP_c = eval_func(distmat, qPids, gPids, qCids, gCids, q_clo_ids=qClothesids,
-                                         g_clo_ids=gClothesids)
+        # cmc_c, mAP_c, mINP_c = eval_func(distmat, qPids, gPids, qCids, gCids, q_clo_ids=qClothesids,
+        #                                  g_clo_ids=gClothesids)
         logging.info(f'standard mode test result:[rank-1:{cmc_s[0]:.2%}],[rank-3:{cmc_s[2]:.2%}]'
                      f',[rank-5:{cmc_s[4]:.2%}],[rank-10:{cmc_s[9]:.2%}]')
         logging.info(f'standard mode test result:[mAP:{mAP_s:.2%}],[mINP:{mINP_s:.2%}]')
-        logging.info(f'clothes changing mode test result:[rank-1:{cmc_c[0]:.2%}],[rank-3:{cmc_c[2]:.2%}]'
-                     f',[rank-5:{cmc_c[4]:.2%}],[rank-10:{cmc_c[9]:.2%}]')
-        logging.info(f'clothes changing mode test result:[mAP:{mAP_c:.2%}],[mINP:{mINP_c:.2%}]')
+        # logging.info(f'clothes changing mode test result:[rank-1:{cmc_c[0]:.2%}],[rank-3:{cmc_c[2]:.2%}]'
+        #              f',[rank-5:{cmc_c[4]:.2%}],[rank-10:{cmc_c[9]:.2%}]')
+        # logging.info(f'clothes changing mode test result:[mAP:{mAP_c:.2%}],[mINP:{mINP_c:.2%}]')
         if self.writer is not None:
             self.writer.add_scalar('test-standard/rank-1', cmc_s[0], epoch)
             self.writer.add_scalar('test-standard/mAP', mAP_s, epoch)
             self.writer.add_scalar('test-standard/mINP', mINP_s, epoch)
             # for i, p in enumerate(cmc_s):
             #     self.writer.add_scalar(f'test-standard/cmc/e{epoch}', p, i)
-            self.writer.add_scalar('test-changing/rank-1', cmc_c[0], epoch)
-            self.writer.add_scalar('test-changing/mAP', mAP_c, epoch)
-            self.writer.add_scalar('test-changing/mINP', mINP_c, epoch)
+            # self.writer.add_scalar('test-changing/rank-1', cmc_c[0], epoch)
+            # self.writer.add_scalar('test-changing/mAP', mAP_c, epoch)
+            # self.writer.add_scalar('test-changing/mINP', mINP_c, epoch)
             # for i, p in enumerate(cmc_c):
             #     self.writer.add_scalar(f'test-changing/cmc/e{epoch}', p, i)
             # feature visualization
