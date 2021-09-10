@@ -7,7 +7,7 @@ from utils.eval_reid import eval_func
 from utils.triplet_loss import CrossEntropyLabelSmooth, WeightedRegularizedTriplet
 from utils.center_loss import CenterLoss
 import numpy as np
-from utils.re_ranking import re_ranking
+from utils.re_ranking import re_ranking, compute_dis_matrix
 #from model.net.multi_branch_network import MbNetwork
 from model.net.person_transformer import PersonTransformer
 from tensorboardX import SummaryWriter
@@ -53,8 +53,12 @@ class ModelManager:
             params += [{"params": [value], "lr": self.lr, "weight_decay": self.weight_decay}]
         self.optimizer = getattr(torch.optim, cfg.get('optimzer', 'Adam'))(params)
 
+        # metric 
+        self.metrics = cfg.get('metric','euclidean')
+        self.re_ranking = cfg.get('re_ranking', True)
         # tensorboardX
         self.writer = writer
+
 
     @staticmethod
     def load_model(model, name):
@@ -152,7 +156,6 @@ class ModelManager:
             masks = masks.to(self.device)
             with torch.no_grad():
                 f_whole = self.net(imgs, masks,cids)
-                f_whole = f_whole.cpu()
                 gf.append(f_whole)
                 gPids = np.concatenate((gPids, pids.numpy()), axis=0)
                 gCids = np.concatenate((gCids, cids.numpy()), axis=0)
@@ -169,7 +172,6 @@ class ModelManager:
             masks = masks.to(self.device)
             with torch.no_grad():
                 f_whole = self.net(imgs, masks,cids)
-                f_whole = f_whole.cpu()
                 qf.append(f_whole)
                 qPids = np.concatenate((qPids, pids.numpy()), axis=0)
                 qCids = np.concatenate((qCids, cids.numpy()), axis=0)
@@ -177,12 +179,9 @@ class ModelManager:
         qf = torch.cat(qf, dim=0)
 
         logging.info("compute rank list and score")
-        m, n = qf.shape[0], gf.shape[0]
-        distmat = torch.pow(qf, 2).sum(dim=1, keepdim=True).expand(m, n) + \
-                  torch.pow(gf, 2).sum(dim=1, keepdim=True).expand(n, m).t()
-        distmat.addmm_(qf, gf.t(),beta = 1, alpha = -2)
-        distmat = distmat.cpu().numpy()
-        #distmat = re_ranking(qf, gf, k1=20, k2=6, lambda_value=0.3)
+        qf = qf.cpu()
+        gf = gf.cpu()
+        distmat = compute_dis_matrix(qf,gf,self.metrics, self.re_ranking)
         # standard mode
         cmc_s, mAP_s, mINP_s = eval_func(distmat, qPids, gPids, qCids, gCids)
         # clothes changing mode
