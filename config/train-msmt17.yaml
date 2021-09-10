@@ -8,13 +8,14 @@ network-params:
   lr_adjust:
     - 10
     - 30
-    - 60
+    - 100
   weight_decay: 0.0003
   epoch: 128
   continue_train: False
   optimzer: SGD
   vit-pretrained-path: ./pretrained/jx_vit_base_p16_224-80ecf9dd.pth
   camera-num: 15
+  re_ranking: False
 
 dataset:
   dataset_name: msmt17
@@ -23,5 +24,5 @@ dataset:
     - 256
     - 128
   num_workers: 8
-  batch_size: 64
+  batch_size: 512
   type: image

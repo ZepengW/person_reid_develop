@@ -115,6 +115,10 @@ class PersonTransformer(nn.Module):
             else:
                 return torch.cat(
                     [global_feat, local_feat_1 / 4, local_feat_2 / 4, local_feat_3 / 4, local_feat_4 / 4], dim=1)
+            # if self.neck_feat == 'after':
+            #     return feat
+            # else:
+            #     return global_feat
 
 
 

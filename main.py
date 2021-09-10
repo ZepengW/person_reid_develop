@@ -112,7 +112,7 @@ def main(config, writer_tensorboardX):
             is_vis = True if (i % 20 == 0 or i == model_config.get('epoch', 64) - 1) else False
             is_vis = is_vis and vis_bool
             model.train(loader_train_source, i, is_vis)
-            if i % 10 == 0 or i == model_config.get('epoch', 64) - 1:
+            if i % 20 == 0 or i == model_config.get('epoch', 64) - 1:
                 model.test(loader_query_source, loader_gallery_source, epoch=i, is_vis = vis_bool)
 
     logging.info("finish!")
