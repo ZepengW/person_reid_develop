@@ -22,7 +22,9 @@ class ModelManager:
         # model load
         # add your own network here
         self.net = PersonTransformer(num_classes=class_num,camera_num=cfg.get('camera-num'),
-                                     vit_pretrained_path=cfg.get('vit-pretrained-path',None))
+                                     vit_pretrained_path=cfg.get('vit-pretrained-path',None),
+                                     mask_embed= cfg.get('mask_embed', True))
+        self.mask_embed = cfg.get('mask_embed', True)
 
         # Multi-GPU Set
         if torch.cuda.device_count() > 1:
@@ -105,7 +107,8 @@ class ModelManager:
 
             # extract body part features
             imgs = imgs.to(self.device)
-            masks = masks.to(self.device)
+            if self.mask_embed:
+                masks = masks.to(self.device)
             cam_id = cam_id.to(self.device)
             scores, feats = self.net(imgs, masks,cam_id)
             ids = ids.to(self.device)

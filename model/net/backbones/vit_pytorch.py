@@ -337,18 +337,23 @@ class TransReID(nn.Module):
     def __init__(self, img_size=224, patch_size=16, stride_size=16, in_chans=3, num_classes=1000, embed_dim=768, depth=12,
                  num_heads=12, mlp_ratio=4., qkv_bias=False, qk_scale=None, drop_rate=0., attn_drop_rate=0., camera=0, view=0,
                  drop_path_rate=0., hybrid_backbone=None, norm_layer=nn.LayerNorm, local_feature=False, sie_xishu =1.0,
-                 mask_num = 20):
+                 mask_num = 20, mask_embed = True):
         super().__init__()
         self.num_classes = num_classes
         self.num_features = self.embed_dim = embed_dim  # num_features for consistency with other models
         self.local_feature = local_feature
+        self.embed_mask = mask_embed
         if hybrid_backbone is not None:
             self.patch_embed = HybridEmbed(
                 hybrid_backbone, img_size=img_size, in_chans=in_chans, embed_dim=embed_dim)
         else:
-            self.patch_embed = PatchEmbed_overlap_MaskEmbed(
-                img_size=img_size, patch_size=patch_size, stride_size=stride_size, in_chans=in_chans,
-                embed_dim=embed_dim)
+            if mask_embed == True:
+                self.patch_embed = PatchEmbed_overlap_MaskEmbed(
+                    img_size=img_size, patch_size=patch_size, stride_size=stride_size, in_chans=in_chans,
+                    embed_dim=embed_dim)
+            else:
+                self.patch_embed = PatchEmbed_overlap(img_size=img_size, patch_size=patch_size, stride_size=stride_size, in_chans=in_chans,
+                    embed_dim=embed_dim)
 
         num_patches = self.patch_embed.num_patches
 
@@ -423,7 +428,10 @@ class TransReID(nn.Module):
     def forward_features(self, x, camera_id, view_id, mask):
         B = x.shape[0]
         # mask shape except: [B,H,W]
-        x = self.patch_embed(x,mask,self.mask_embed)
+        if self.embed_mask:
+            x = self.patch_embed(x,mask,self.mask_embed)
+        else:
+            x = self.patch_embed(x)
 
         cls_tokens = self.cls_token.expand(B, -1, -1)  # stole cls_tokens impl from Phil Wang, thanks
         x = torch.cat((cls_tokens, x), dim=1)
@@ -504,11 +512,11 @@ def resize_pos_embed(posemb, posemb_new, hight, width):
     return posemb
 
 
-def vit_base_patch16_224_TransReID(img_size=(256, 128), stride_size=16, drop_rate=0.0, attn_drop_rate=0.0, drop_path_rate=0.1, camera=0, view=0,local_feature=False,sie_xishu=1.5, **kwargs):
+def vit_base_patch16_224_TransReID(img_size=(256, 128), stride_size=16, drop_rate=0.0, attn_drop_rate=0.0, drop_path_rate=0.1, camera=0, view=0,local_feature=False,sie_xishu=1.5,mask_embed=True, **kwargs):
     model = TransReID(
         img_size=img_size, patch_size=16, stride_size=stride_size, embed_dim=768, depth=12, num_heads=12, mlp_ratio=4, qkv_bias=True,\
         camera=camera, view=view, drop_path_rate=drop_path_rate, drop_rate=drop_rate, attn_drop_rate=attn_drop_rate,
-        norm_layer=partial(nn.LayerNorm, eps=1e-6),  sie_xishu=sie_xishu, local_feature=local_feature, **kwargs)
+        norm_layer=partial(nn.LayerNorm, eps=1e-6),  sie_xishu=sie_xishu, local_feature=local_feature, mask_embed=mask_embed, **kwargs)
 
     return model
 

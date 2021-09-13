@@ -1,17 +1,13 @@
-mode: train
+mode: test
 gpu: [0]
-task-name: MaskFormer-v1-msmt17
+task-name: MaskFormer-v1-msmt17-test
 
 network-params:
-  name: MaskFormer-v1-msmt17-Adam
-  lr: 0.1
-  lr-adjust:
-    - 10
-    - 30
-    - 100
+  name: MaskFormer-v1-msmt17
+  lr: 0.0001
   weight_decay: 0.0003
   epoch: 128
-  continue_train: False
+  continue_train: True
   optimzer: Adam
   vit-pretrained-path: ./pretrained/jx_vit_base_p16_224-80ecf9dd.pth
   camera-num: 15

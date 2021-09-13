@@ -5,7 +5,7 @@ import copy
 import torch
 
 class PersonTransformer(nn.Module):
-    def __init__(self, num_classes, camera_num=3, vit_pretrained_path=None):
+    def __init__(self, num_classes, camera_num=3, vit_pretrained_path=None, mask_embed = True):
         super(PersonTransformer, self).__init__()
         self.neck_feat = 'after'
         self.in_planes = 768
@@ -15,7 +15,7 @@ class PersonTransformer(nn.Module):
         self.shift_num = 5
         self.rearrange = True
         # vit backbone network
-        self.vit_backbone = vit_base_patch16_224_TransReID(camera = camera_num, stride_size=[12,12], local_feature= True)
+        self.vit_backbone = vit_base_patch16_224_TransReID(camera = camera_num, stride_size=[12,12], local_feature= True, mask_embed = mask_embed)
         block = self.vit_backbone.blocks[-1]
         layer_norm = self.vit_backbone.norm
         self.b1 = nn.Sequential(
