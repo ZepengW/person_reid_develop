@@ -27,8 +27,8 @@ import torch
 from sklearn.metrics import pairwise_distances
 
 
-def compute_dis_matrix(prob_feat, gal_feat, metric, re_ranking=True):
-    if re_ranking:
+def compute_dis_matrix(prob_feat, gal_feat, metric, is_re_ranking=True):
+    if is_re_ranking:
         return re_ranking(prob_feat,gal_feat,k1=20, k2=6, lambda_value=0.3)
     else:
         if metric == 'cosine':
