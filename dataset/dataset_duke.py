@@ -9,6 +9,7 @@ class Duke(object):
         train_dir = os.path.join(self.dataset_dir,'bounding_box_train')
         test_dir = os.path.join(self.dataset_dir,'bounding_box_test')
         query_dir = os.path.join(self.dataset_dir,'query')
+        self.patch_mask_dir = os.path.join(self.dataset_dir,'vit_patch_mask')
 
         train_list, num_train_pids, num_train_imgs = self._process_data(train_dir,relabel=True)
         test_list, num_test_pids, num_test_imgs = self._process_data(test_dir)
@@ -41,7 +42,9 @@ class Duke(object):
             img_path = os.path.join(dir,file)
             pid = int(file.split('_')[0])
             cid = int((file.split('c')[1]).split('_')[0])
-            train_list.append((img_path,pid,cid))
+            clothes_id = -1
+            path_patch_mask = os.path.join(self.patch_mask_dir,os.path.splitext(file)[0]+'.pt')
+            train_list.append((img_path,pid,cid,clothes_id,(path_patch_mask,)))
             id_set.add(pid)
         # relabel id to continues
         if relabel:
@@ -49,6 +52,6 @@ class Duke(object):
             id_list.sort()
             train_list_relabel = []
             for i in train_list:
-                train_list_relabel.append((i[0],id_list.index(i[1]),i[2]))
+                train_list_relabel.append((i[0],id_list.index(i[1]),i[2],i[3],i[4]))
             train_list = train_list_relabel
         return train_list, len(id_set), len(train_list)

@@ -1,27 +1,29 @@
 mode: train_test
 gpu: [0]
+task-name: MaskFormer-v1-duke
 
 network-params:
-  name: resnet50-duke
-  lr: 0.0001
-  lr_adjust:
-    - 20
-    - 40
-    - 60
-    - 90
+  name: MaskFormer-v1-duke
+  lr: 0.1
+  lr-adjust:
+    - 10
+    - 30
+    - 100
   weight_decay: 0.0003
-  epoch: 64
-  continue_train: True
-  optimzer: Adam
+  epoch: 128
+  continue_train: False
+  optimzer: SGD
+  vit-pretrained-path: ./pretrained/jx_vit_base_p16_224-80ecf9dd.pth
+  camera-num: 15
+  re_ranking: True
+  mask_embed: True
 
 dataset:
-  dataset_name: duke
+  dataset_name: msmt17
   dataset_path: ../dataset/DukeMTMC-reID
   image_size:
     - 256
     - 128
   num_workers: 8
-  batch_size: 128
-  seq_len: 30
+  batch_size: 64
   type: image
-  num-mask: 6
