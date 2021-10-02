@@ -21,10 +21,11 @@ class JointFromer(nn.Module):
         self.pose_subnet = Pose_Subnet(blocks=[OSBlock, OSBlock], in_channels=pose_inchannel,
                                        channels=[32, 32, 32], att_num=parts, matching_score_reg=part_score_reg)
         self.pose_pool = nn.AdaptiveAvgPool2d((1, 1))
+        self.whole_feat_pool = nn.AdaptiveAvgPool2d((1,1))
         self.parts_avgpool = nn.ModuleList([nn.AdaptiveAvgPool2d((1, 1)) for _ in range(self.parts)])
         self.downsample = nn.Conv2d(2048,self.in_planes,(1,1))
         # vit backbone network
-        self.transformer = TransReID(num_classes=num_classes, num_patches=parts,embed_dim=self.in_planes)
+        self.transformer = TransReID(num_classes=num_classes, num_patches=parts + 1,embed_dim=self.in_planes)
         # bottleneck
         self.bottleneck = nn.BatchNorm1d(self.in_planes)
         self.bottleneck.bias.requires_grad_(False)
@@ -40,6 +41,9 @@ class JointFromer(nn.Module):
         pose_att = pose_att * onehot_index
         pose_att_pool = self.pose_pool(pose_att)
         v_g = []
+        whole_feat = self.whole_feat_pool(feat_map)
+        whole_feat = whole_feat.reshape([B,1,-1,1,1])
+        v_g.append(whole_feat)
         for i in range(self.parts):
             v_g_i = feat_map * pose_att[:, i, :, :].unsqueeze(1) / (pose_att_pool[:, i, :, :].unsqueeze(1) + 1e-6)
             v_g_i = self.parts_avgpool[i](v_g_i)
@@ -49,7 +53,7 @@ class JointFromer(nn.Module):
         # covert 2048 dim to 768 dim for inputing transformer
         v_g = v_g.reshape([-1, 2048, 1, 1])
         v_g = self.downsample(v_g)
-        v_g = v_g.reshape([B,self.parts, -1])
+        v_g = v_g.reshape([B,self.parts + 1, -1])
         # transformer
         feats = self.transformer(v_g)
         feats_global = feats[:,0]
