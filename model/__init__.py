@@ -102,15 +102,15 @@ class ModelManager:
         total_loss_array = np.zeros([3, batch_num])
         pids_l = []
         features_vis = []
-        for idx, (imgs, ids, cam_id, _, masks) in enumerate(dataloader):
+        for idx, (imgs, ids, cam_id, _, heatmaps) in enumerate(dataloader):
             self.optimizer.zero_grad()
 
             # extract body part features
             imgs = imgs.to(self.device)
             if self.mask_embed:
-                masks = masks.to(self.device)
+                heatmaps = heatmaps.to(self.device)
             cam_id = cam_id.to(self.device)
-            scores, feats = self.net(imgs, masks,cam_id)
+            scores, feats = self.net(imgs, heatmaps,cam_id)
             ids = ids.to(self.device)
 
             # compute loss
@@ -154,11 +154,11 @@ class ModelManager:
         gCids = np.array([], dtype=int)
         gClothesids = np.array([], dtype=int)
         logging.info("compute features of gallery samples")
-        for idx, (imgs, pids, cids, clothes_ids, masks) in enumerate(galleryLoader):
+        for idx, (imgs, pids, cids, clothes_ids, heatmaps) in enumerate(galleryLoader):
             imgs = imgs.to(self.device)
-            masks = masks.to(self.device)
+            heatmaps = heatmaps.to(self.device)
             with torch.no_grad():
-                f_whole = self.net(imgs, masks,cids)
+                f_whole = self.net(imgs, heatmaps,cids)
                 gf.append(f_whole)
                 gPids = np.concatenate((gPids, pids.numpy()), axis=0)
                 gCids = np.concatenate((gCids, cids.numpy()), axis=0)
@@ -170,11 +170,11 @@ class ModelManager:
         qPids = np.array([], dtype=int)
         qCids = np.array([], dtype=int)
         qClothesids = np.array([], dtype=int)
-        for idx, (imgs, pids, cids, clothes_ids, masks) in enumerate(queryLoader):
+        for idx, (imgs, pids, cids, clothes_ids, heatmaps) in enumerate(queryLoader):
             imgs = imgs.to(self.device)
-            masks = masks.to(self.device)
+            heatmaps = heatmaps.to(self.device)
             with torch.no_grad():
-                f_whole = self.net(imgs, masks,cids)
+                f_whole = self.net(imgs, heatmaps,cids)
                 qf.append(f_whole)
                 qPids = np.concatenate((qPids, pids.numpy()), axis=0)
                 qCids = np.concatenate((qCids, cids.numpy()), axis=0)
