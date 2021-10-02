@@ -31,11 +31,12 @@ def set_gpus_env(gpu_ids):
 
 def main(config, writer_tensorboardX):
     device = set_gpus_env(config.get('gpu', [0]))
-    ### pre transform methods on images
-    t = tf.build_transforms()
-    t_mask = tf.build_transforms_mask()
+
 
     dataset_config = config.get('dataset', dict())
+    ### pre transform methods on images
+    size = dataset_config.get('image_size', [256,128])
+    t, _ = tf.build_unified_transforms(size[0], size[1])
     dataset_manager = DatasetManager(dataset_config.get('dataset_name', ''), dataset_config.get('dataset_path', ''),
                                      num_mask=dataset_config.get('num-mask', 6))
 
@@ -51,7 +52,7 @@ def main(config, writer_tensorboardX):
     if 'train' == mode:
         logging.info("loading train data")
         loader_train_source = DataLoader(
-            get_dataset('train', transform=t, transform_mask=t_mask),
+            get_dataset('train', transform=t),
             batch_size=dataset_config.get('batch_size', 16),
             num_workers=dataset_config.get('num_workers', 8),
             drop_last=True,
@@ -65,14 +66,14 @@ def main(config, writer_tensorboardX):
     elif 'test' == mode:
         logging.info("loading test data")
         loader_gallery_source = DataLoader(
-            get_dataset('test', transform=t, transform_mask=t_mask),
+            get_dataset('test', transform=t),
             batch_size=dataset_config.get('batch_size', 16),
             num_workers=dataset_config.get('num_workers', 8),
             drop_last=False,
             shuffle=True
         )
         loader_query_source = DataLoader(
-            get_dataset('query', transform=t, transform_mask=t_mask),
+            get_dataset('query', transform=t),
             batch_size=dataset_config.get('batch_size', 16),
             num_workers=dataset_config.get('num_workers', 8),
             drop_last=False,
@@ -83,7 +84,7 @@ def main(config, writer_tensorboardX):
     elif 'train_test' == mode:
         logging.info("loading train data")
         loader_train_source = DataLoader(
-            get_dataset('train', transform=t, transform_mask=t_mask),
+            get_dataset('train', transform=t),
             batch_size=dataset_config.get('batch_size', 16),
             num_workers=dataset_config.get('num_workers', 8),
             drop_last=True,
@@ -92,14 +93,14 @@ def main(config, writer_tensorboardX):
         logging.info("load train data finish")
         logging.info("loading test data")
         loader_gallery_source = DataLoader(
-            get_dataset('test', transform=t, transform_mask=t_mask),
+            get_dataset('test', transform=t),
             batch_size=dataset_config.get('batch_size', 16),
             num_workers=dataset_config.get('num_workers', 8),
             drop_last=False,
             shuffle=True
         )
         loader_query_source = DataLoader(
-            get_dataset('query', transform=t, transform_mask=t_mask),
+            get_dataset('query', transform=t),
             batch_size=dataset_config.get('batch_size', 16),
             num_workers=dataset_config.get('num_workers', 8),
             drop_last=False,

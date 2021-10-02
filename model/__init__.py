@@ -9,7 +9,8 @@ from utils.center_loss import CenterLoss
 import numpy as np
 from utils.re_ranking import re_ranking, compute_dis_matrix
 #from model.net.multi_branch_network import MbNetwork
-from model.net.person_transformer import PersonTransformer
+#from model.net.person_transformer import PersonTransformer
+from model.net.joint_transformer import JointFromer
 from tensorboardX import SummaryWriter
 
 
@@ -21,9 +22,10 @@ class ModelManager:
 
         # model load
         # add your own network here
-        self.net = PersonTransformer(num_classes=class_num,camera_num=cfg.get('camera-num'),
-                                     vit_pretrained_path=cfg.get('vit-pretrained-path',None),
-                                     mask_embed= cfg.get('mask_embed', True))
+        # self.net = PersonTransformer(num_classes=class_num,camera_num=cfg.get('camera-num'),
+        #                              vit_pretrained_path=cfg.get('vit-pretrained-path',None),
+        #                              mask_embed= cfg.get('mask_embed', True))
+        self.net = JointFromer(num_classes=class_num)
         self.mask_embed = cfg.get('mask_embed', True)
 
         # Multi-GPU Set
@@ -109,17 +111,12 @@ class ModelManager:
             imgs = imgs.to(self.device)
             if self.mask_embed:
                 heatmaps = heatmaps.to(self.device)
-            cam_id = cam_id.to(self.device)
-            scores, feats = self.net(imgs, heatmaps,cam_id)
+            score, feat = self.net(imgs, heatmaps)
             ids = ids.to(self.device)
 
             # compute loss
-            loss_trip = 0
-            loss_xent = 0
-            for i in range(0,len(scores)):
-                loss_xent += self.lossesFunction['xent'](scores[i],ids)
-            for i in range(0,len(feats)):
-                loss_trip += self.lossesFunction['trip_weight'](feats[i], ids)[0]
+            loss_xent = self.lossesFunction['xent'](score, ids)
+            loss_trip = self.lossesFunction['trip_weight'](feat, ids)[0]
 
             total_loss = loss_trip + loss_xent
 
@@ -133,11 +130,11 @@ class ModelManager:
             # vis features
             pids_l += ids.tolist()  # record pid for visualization
             if is_vis:
-                f = PCA_svd(feats[0], 3)
+                f = PCA_svd(feat, 3)
                 features_vis = features_vis + f.tolist()
 
-        logging.info('[Epoch:{:0>4d}] LOSS=[total:{:.4f}]'
-                     .format(epoch, np.mean(total_loss_array[0])))
+        logging.info(f'[Epoch:{epoch:0>4d}] LOSS=[total:{np.mean(total_loss_array[0]):.4f} | \
+            xent:{np.mean(total_loss_array[1]):.4f}  triplet:{np.mean(total_loss_array[2]):.4f} ]')
         if self.writer is not None:
             self.writer.add_scalar('train/loss', np.mean(total_loss_array[0]), epoch)
             self.writer.add_scalar('train/loss-xent', np.mean(total_loss_array[1]), epoch)
@@ -158,7 +155,7 @@ class ModelManager:
             imgs = imgs.to(self.device)
             heatmaps = heatmaps.to(self.device)
             with torch.no_grad():
-                f_whole = self.net(imgs, heatmaps,cids)
+                f_whole = self.net(imgs, heatmaps)
                 gf.append(f_whole)
                 gPids = np.concatenate((gPids, pids.numpy()), axis=0)
                 gCids = np.concatenate((gCids, cids.numpy()), axis=0)
@@ -174,7 +171,7 @@ class ModelManager:
             imgs = imgs.to(self.device)
             heatmaps = heatmaps.to(self.device)
             with torch.no_grad():
-                f_whole = self.net(imgs, heatmaps,cids)
+                f_whole = self.net(imgs, heatmaps)
                 qf.append(f_whole)
                 qPids = np.concatenate((qPids, pids.numpy()), axis=0)
                 qCids = np.concatenate((qCids, cids.numpy()), axis=0)

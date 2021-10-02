@@ -334,54 +334,16 @@ class PatchEmbed_overlap_MaskEmbed(nn.Module):
 class TransReID(nn.Module):
     """ Transformer-based Object Re-Identification
     """
-    def __init__(self, img_size=224, patch_size=16, stride_size=16, in_chans=3, num_classes=1000, embed_dim=768, depth=12,
-                 num_heads=12, mlp_ratio=4., qkv_bias=False, qk_scale=None, drop_rate=0., attn_drop_rate=0., camera=0, view=0,
-                 drop_path_rate=0., hybrid_backbone=None, norm_layer=nn.LayerNorm, local_feature=False, sie_xishu =1.0,
-                 mask_num = 20, mask_embed = True):
+    def __init__(self, num_classes=1000, embed_dim=768, depth=12,
+                 num_heads=12, mlp_ratio=4., qkv_bias=False, qk_scale=None, drop_rate=0., attn_drop_rate=0.,
+                 drop_path_rate=0., norm_layer=nn.LayerNorm, local_feature=True, num_patches=6):
         super().__init__()
         self.num_classes = num_classes
         self.num_features = self.embed_dim = embed_dim  # num_features for consistency with other models
         self.local_feature = local_feature
-        self.embed_mask = mask_embed
-        if hybrid_backbone is not None:
-            self.patch_embed = HybridEmbed(
-                hybrid_backbone, img_size=img_size, in_chans=in_chans, embed_dim=embed_dim)
-        else:
-            if mask_embed == True:
-                self.patch_embed = PatchEmbed_overlap_MaskEmbed(
-                    img_size=img_size, patch_size=patch_size, stride_size=stride_size, in_chans=in_chans,
-                    embed_dim=embed_dim)
-            else:
-                self.patch_embed = PatchEmbed_overlap(img_size=img_size, patch_size=patch_size, stride_size=stride_size, in_chans=in_chans,
-                    embed_dim=embed_dim)
-
-        num_patches = self.patch_embed.num_patches
 
         self.cls_token = nn.Parameter(torch.zeros(1, 1, embed_dim))
         self.pos_embed = nn.Parameter(torch.zeros(1, num_patches + 1, embed_dim))
-        # Initialize Mask Embedding
-        self.mask_embed = nn.Parameter(torch.zeros(mask_num,embed_dim))
-
-        self.cam_num = camera
-        self.view_num = view
-        self.sie_xishu = sie_xishu
-        # Initialize SIE Embedding
-        if camera > 1 and view > 1:
-            self.sie_embed = nn.Parameter(torch.zeros(camera * view, 1, embed_dim))
-            trunc_normal_(self.sie_embed, std=.02)
-            print('camera number is : {} and viewpoint number is : {}'.format(camera, view))
-            print('using SIE_Lambda is : {}'.format(sie_xishu))
-        elif camera > 1:
-            self.sie_embed = nn.Parameter(torch.zeros(camera, 1, embed_dim))
-            trunc_normal_(self.sie_embed, std=.02)
-            print('camera number is : {}'.format(camera))
-            print('using SIE_Lambda is : {}'.format(sie_xishu))
-        elif view > 1:
-            self.sie_embed = nn.Parameter(torch.zeros(view, 1, embed_dim))
-            trunc_normal_(self.sie_embed, std=.02)
-            print('viewpoint number is : {}'.format(view))
-            print('using SIE_Lambda is : {}'.format(sie_xishu))
-
         print('using drop_out rate is : {}'.format(drop_rate))
         print('using attn_drop_out rate is : {}'.format(attn_drop_rate))
         print('using drop_path rate is : {}'.format(drop_path_rate))
@@ -401,7 +363,6 @@ class TransReID(nn.Module):
         self.fc = nn.Linear(embed_dim, num_classes) if num_classes > 0 else nn.Identity()
         trunc_normal_(self.cls_token, std=.02)
         trunc_normal_(self.pos_embed, std=.02)
-        trunc_normal_(self.mask_embed,std=.02)
 
         self.apply(self._init_weights)
 
@@ -425,25 +386,13 @@ class TransReID(nn.Module):
         self.num_classes = num_classes
         self.fc = nn.Linear(self.embed_dim, num_classes) if num_classes > 0 else nn.Identity()
 
-    def forward_features(self, x, camera_id, view_id, mask):
+    def forward_features(self, x):
         B = x.shape[0]
-        # mask shape except: [B,H,W]
-        if self.embed_mask:
-            x = self.patch_embed(x,mask,self.mask_embed)
-        else:
-            x = self.patch_embed(x)
 
         cls_tokens = self.cls_token.expand(B, -1, -1)  # stole cls_tokens impl from Phil Wang, thanks
         x = torch.cat((cls_tokens, x), dim=1)
 
-        if self.cam_num > 0 and self.view_num > 0:
-            x = x + self.pos_embed + self.sie_xishu * self.sie_embed[camera_id * self.view_num + view_id]
-        elif self.cam_num > 0:
-            x = x + self.pos_embed + self.sie_xishu * self.sie_embed[camera_id]
-        elif self.view_num > 0:
-            x = x + self.pos_embed + self.sie_xishu * self.sie_embed[view_id]
-        else:
-            x = x + self.pos_embed
+        x = x + self.pos_embed
 
 
 
@@ -462,8 +411,8 @@ class TransReID(nn.Module):
 
             return x[:, 0]
 
-    def forward(self, x, mask, cam_label=None, view_label=None):
-        x = self.forward_features(x, cam_label, view_label, mask)
+    def forward(self, x):
+        x = self.forward_features(x)
         return x
 
     def calculate_mask_embedding(self, mask):
