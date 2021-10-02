@@ -42,7 +42,7 @@ class ModelManager:
 
         # loss function
         self.lossesFunction = {}
-        self.lossesFunction['xent'] = nn.CrossEntropyLoss()
+        self.lossesFunction['xent'] = CrossEntropyLabelSmooth(class_num)
         self.lossesFunction['trip_weight'] = WeightedRegularizedTriplet()
 
         # optim
