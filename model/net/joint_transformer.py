@@ -11,7 +11,7 @@ class JointFromer(nn.Module):
     Joint Transformer v0.1
     '''
     def __init__(self, num_classes, parts = 6,
-                 pose_inchannel=56, part_score_reg = True, in_planes = 768):
+                 pose_inchannel=56, part_score_reg = True, in_planes = 768*2):
         super(JointFromer, self).__init__()
         self.parts = parts
         self.num_classes = num_classes
@@ -30,8 +30,14 @@ class JointFromer(nn.Module):
         self.bottleneck = nn.BatchNorm1d(self.in_planes)
         self.bottleneck.bias.requires_grad_(False)
         self.bottleneck.apply(weights_init_kaiming)
+        self.bottleneck_whole = nn.BatchNorm1d(self.in_planes)
+        self.bottleneck_whole.bias.requires_grad_(False)
+        self.bottleneck_whole.apply(weights_init_kaiming)
+        self.bottleneck_parts = nn.BatchNorm1d(self.in_planes)
+        self.bottleneck_parts.bias.requires_grad_(False)
+        self.bottleneck_parts.apply(weights_init_kaiming)
         # classify layer
-        self.classify = nn.Linear(self.in_planes, self.num_classes, bias=False)
+        self.classify = nn.Linear(self.in_planes*3, self.num_classes, bias=False)
 
     def forward(self, x, pose_map):
         B = x.shape[0]
@@ -57,7 +63,12 @@ class JointFromer(nn.Module):
         # transformer
         feats = self.transformer(v_g)
         feats_global = feats[:,0]
-        feats = self.bottleneck(feats_global)
+        feats_whole = feats[:,1]
+        feats_parts = torch.mean(feats[:,2:],dim=1)
+        feats_global = self.bottleneck(feats_global)
+        feats_whole = self.bottleneck_whole(feats_whole)
+        feats_parts = self.bottleneck_parts(feats_parts)
+        feats = torch.cat([feats_global,feats_whole,feats_parts],dim=1)
         # output
         if self.training:
             score = self.classify(feats)
