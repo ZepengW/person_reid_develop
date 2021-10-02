@@ -41,7 +41,7 @@ class Market(object):
             pid = int(file.split('_')[0])
             cid = int((file.split('c')[1]).split('s')[0])
             clothes_id = -1
-            hm_path = os.path.join(hm_dir, file.split('.jpg')[0] + '_pose_heatmaps.png')
+            hm_path = os.path.join(hm_dir, os.path.splitext(file)[0] + '_pose_heatmaps.png')
             train_list.append((img_path,pid,cid,clothes_id,hm_path))
             id_set.add(pid)
         # relabel id to continues
