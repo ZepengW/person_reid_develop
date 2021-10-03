@@ -31,6 +31,9 @@ def set_gpus_env(gpu_ids):
 
 def main(config, writer_tensorboardX):
     device = set_gpus_env(config.get('gpu', [0]))
+    vis_bool = config.get('vis', False)
+    vis_interval = config.get('vis_interval', 20)
+    eval_interval = config.get('eval_interval', 20)
 
 
     dataset_config = config.get('dataset', dict())
@@ -47,8 +50,6 @@ def main(config, writer_tensorboardX):
     mode = config.get('mode', 'train')
     dataset_type = dataset_config.get('type', 'image')
     get_dataset = getattr(dataset_manager, 'get_dataset_' + dataset_type)
-
-    vis_bool = config.get('vis', False)
     if 'train' == mode:
         logging.info("loading train data")
         loader_train_source = DataLoader(
@@ -110,10 +111,10 @@ def main(config, writer_tensorboardX):
         logging.info("prepare to train from epoch[{0}] to epoch[{1}]".format(model.trained_epoches,
                                                                              model_config.get('epoch', 64) - 1))
         for i in range(model.trained_epoches, model_config.get('epoch', 64)):
-            is_vis = True if (i % 20 == 0 or i == model_config.get('epoch', 64) - 1) else False
+            is_vis = True if (i % vis_interval == 0 or i == model_config.get('epoch', 64) - 1) else False
             is_vis = is_vis and vis_bool
             model.train(loader_train_source, i, is_vis)
-            if i % 20 == 0 or i == model_config.get('epoch', 64) - 1:
+            if (i % eval_interval == 0 and i != 0) or i == model_config.get('epoch', 64) - 1:
                 model.test(loader_query_source, loader_gallery_source, epoch=i, is_vis = vis_bool)
 
     logging.info("finish!")
