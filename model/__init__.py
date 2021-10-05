@@ -1,10 +1,11 @@
+from math import inf
 import torch
 import os
 import logging
 import torch.nn as nn
 from torch.utils.data import DataLoader
 from utils.eval_reid import eval_func
-from utils.triplet_loss import CrossEntropyLabelSmooth, WeightedRegularizedTriplet
+from utils.triplet_loss import CrossEntropyLabelSmooth, WeightedRegularizedTriplet, TripletLoss
 from utils.center_loss import CenterLoss
 import numpy as np
 from utils.re_ranking import re_ranking, compute_dis_matrix
@@ -118,11 +119,16 @@ class ModelManager:
             loss_xent = self.lossesFunction['xent'](score, ids)
             loss_trip = self.lossesFunction['trip_weight'](feat, ids)[0]
 
-            total_loss = loss_trip + loss_xent
+            if not torch.isinf(loss_trip):
+                total_loss = loss_xent + loss_trip
+                total_loss_array[2][idx] = (loss_trip.cpu())
+            else:
+                total_loss = loss_xent
+                total_loss_array[2][idx] = 0
 
             total_loss_array[0][idx] = (total_loss.cpu())
             total_loss_array[1][idx] = (loss_xent.cpu())
-            total_loss_array[2][idx] = (loss_trip.cpu())
+            #logging.info(f'[Epoch:{epoch:0>4d}][Batch:{idx}] LOSS=[total:{total_loss.cpu():.4f} | xent:{loss_xent.cpu():.4f}  triplet:{loss_trip.cpu():.4f} ]')
             # update model
             total_loss.backward()
             self.optimizer.step()
@@ -133,8 +139,8 @@ class ModelManager:
                 f = PCA_svd(feat, 3)
                 features_vis = features_vis + f.tolist()
 
-        logging.info(f'[Epoch:{epoch:0>4d}] LOSS=[total:{np.mean(total_loss_array[0]):.4f} | \
-            xent:{np.mean(total_loss_array[1]):.4f}  triplet:{np.mean(total_loss_array[2]):.4f} ]')
+        logging.info(f'[Epoch:{epoch:0>4d}] LOSS=[total:{np.mean(total_loss_array[0]):.4f} | xent:{np.mean(total_loss_array[1]):.4f}  triplet:{np.mean(total_loss_array[2]):.4f} ]')
+        #logging.info(f'[Epoch:{epoch:0>4d}] LOSS=[total:{np.mean(total_loss_array[0]):.4f} | xent:{np.mean(total_loss_array[1]):.4f}]')
         if self.writer is not None:
             self.writer.add_scalar('train/loss', np.mean(total_loss_array[0]), epoch)
             self.writer.add_scalar('train/loss-xent', np.mean(total_loss_array[1]), epoch)
