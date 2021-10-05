@@ -425,18 +425,8 @@ class TransReID(nn.Module):
         if 'state_dict' in param_dict:
             param_dict = param_dict['state_dict']
         for k, v in param_dict.items():
-            if 'head' in k or 'dist' in k:
+            if 'head' in k or 'dist' in k or 'patch_embed' in k or 'pos_embed':
                 continue
-            if 'patch_embed.proj.weight' in k and len(v.shape) < 4:
-                # For old models that I trained prior to conv based patchification
-                O, I, H, W = self.patch_embed.proj.weight.shape
-                v = v.reshape(O, -1, H, W)
-            elif k == 'pos_embed' and v.shape != self.pos_embed.shape:
-                # To resize pos embedding when using model at different size from pretrained weights
-                if 'distilled' in model_path:
-                    print('distill need to choose right cls token in the pth')
-                    v = torch.cat([v[:, 0:1], v[:, 2:]], dim=1)
-                v = resize_pos_embed(v, self.pos_embed, self.patch_embed.num_y, self.patch_embed.num_x)
             try:
                 self.state_dict()[k].copy_(v)
             except:
