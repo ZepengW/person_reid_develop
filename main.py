@@ -39,7 +39,7 @@ def main(config, writer_tensorboardX):
     dataset_config = config.get('dataset', dict())
     ### pre transform methods on images
     size = dataset_config.get('image_size', [256,128])
-    t, _ = tf.build_unified_transforms(size[0], size[1])
+    t = tf.build_transforms(size)
     dataset_manager = DatasetManager(dataset_config.get('dataset_name', ''), dataset_config.get('dataset_path', ''),
                                      num_mask=dataset_config.get('num-mask', 6))
 

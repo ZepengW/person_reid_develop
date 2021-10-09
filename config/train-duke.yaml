@@ -19,11 +19,11 @@ network-params:
   mask_embed: True
 
 dataset:
-  dataset_name: msmt17
+  dataset_name: duke
   dataset_path: ../dataset/DukeMTMC-reID
   image_size:
-    - 256
+    - 384
     - 128
   num_workers: 8
-  batch_size: 64
+  batch_size: 16
   type: image

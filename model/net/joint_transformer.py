@@ -10,22 +10,18 @@ class JointFromer(nn.Module):
     '''
     Joint Transformer v0.1
     '''
-    def __init__(self, num_classes, parts = 6,
-                 pose_inchannel=56, part_score_reg = True, in_planes = 768):
+    def __init__(self, num_classes, parts = 18, in_planes = 768):
         super(JointFromer, self).__init__()
         self.parts = parts
         self.num_classes = num_classes
         self.in_planes = in_planes
         # extract feature
         self.feature_map_extract = PCB_Feature(block=Bottleneck, layers=[3,4,6,3])
-        self.pose_subnet = Pose_Subnet(blocks=[OSBlock, OSBlock], in_channels=pose_inchannel,
-                                       channels=[32, 32, 32], att_num=parts, matching_score_reg=part_score_reg)
-        self.pose_pool = nn.AdaptiveAvgPool2d((1, 1))
-        self.whole_feat_pool = nn.AdaptiveAvgPool2d((1,1))
-        self.parts_avgpool = nn.ModuleList([nn.AdaptiveAvgPool2d((1, 1)) for _ in range(self.parts)])
-        self.downsample = nn.Conv2d(2048,self.in_planes,(1,1))
+        # patch embeding
+        self.downsample = nn.Conv2d(2048, in_planes, kernel_size=1)
+        self.proj = torch.nn.AdaptiveAvgPool2d((1,1))
         # vit backbone network
-        self.transformer = TransReID(num_classes=num_classes, num_patches=parts + 1,embed_dim=self.in_planes,depth=12, num_heads=12, mlp_ratio=4, qkv_bias=True)
+        self.transformer = TransReID(num_classes=num_classes, num_patches=parts,embed_dim=self.in_planes,depth=12, num_heads=12, mlp_ratio=4, qkv_bias=True)
         self.transformer.load_param('./pretrained/jx_vit_base_p16_224-80ecf9dd.pth')
         # bottleneck
         self.bottleneck = nn.BatchNorm1d(self.in_planes)
@@ -40,29 +36,20 @@ class JointFromer(nn.Module):
         # classify layer
         self.classify = nn.Linear(self.in_planes, self.num_classes, bias=False)
 
-    def forward(self, x, pose_map):
+    def forward(self, x, heatmap):
         B = x.shape[0]
+        P = heatmap.shape[1]
         #extract feature
         feat_map = self.feature_map_extract(x)
-        pose_att, part_score, onehot_index = self.pose_subnet(pose_map)
-        pose_att = pose_att * onehot_index
-        pose_att_pool = self.pose_pool(pose_att)
-        v_g = []
-        whole_feat = self.whole_feat_pool(feat_map)
-        whole_feat = whole_feat.reshape([B,1,-1,1,1])
-        v_g.append(whole_feat)
-        for i in range(self.parts):
-            v_g_i = feat_map * pose_att[:, i, :, :].unsqueeze(1) / (pose_att_pool[:, i, :, :].unsqueeze(1) + 1e-6)
-            v_g_i = self.parts_avgpool[i](v_g_i)
-            v_g_i = v_g_i.reshape([B,1,-1,1,1])
-            v_g.append(v_g_i)
-        v_g = torch.cat(v_g,dim=1) # B,parts,2048,1,1
-        # covert 2048 dim to 768 dim for inputing transformer
-        v_g = v_g.reshape([-1, 2048, 1, 1])
-        v_g = self.downsample(v_g)
-        v_g = v_g.reshape([B,self.parts + 1, -1])
+        feat_parts = torch.einsum('bchw,bphw->bpchw',feat_map,heatmap)
+        # patch embedding: Means processing for non-zero elements
+        feat_parts = feat_parts.reshape([B*P]+list(feat_parts.shape[2:]))
+        feat_parts = self.proj(feat_parts)
+        feat_parts = feat_parts.float()
+        feat_parts = self.downsample(feat_parts)
+        feat_parts = feat_parts.reshape(B,P,-1)
         # transformer
-        feats = self.transformer(v_g)
+        feats = self.transformer(feat_parts)
         feats_global = feats[:,0]
         #feats_whole = feats[:,1]
         #feats_parts = torch.mean(feats[:,2:],dim=1)

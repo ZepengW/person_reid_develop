@@ -128,6 +128,12 @@ class ModelManager:
 
             total_loss_array[0][idx] = (total_loss.cpu())
             total_loss_array[1][idx] = (loss_xent.cpu())
+            if (idx+1) % 50 == 0:
+                logging.info(
+                    f'[E{epoch:0>4d}|Batch:{idx:0>4d}/{batch_num:0>4d}] '
+                    f'LOSS=[total:{np.mean(total_loss_array[0,int(idx/50):]):.4f} | '
+                    f'xent:{np.mean(total_loss_array[1,int(idx/50):]):.4f} '
+                    f'triplet:{np.mean(total_loss_array[2,int(idx/50):]):.4f} ]')
             #logging.info(f'[Epoch:{epoch:0>4d}][Batch:{idx}] LOSS=[total:{total_loss.cpu():.4f} | xent:{loss_xent.cpu():.4f}  triplet:{loss_trip.cpu():.4f} ]')
             # update model
             total_loss.backward()

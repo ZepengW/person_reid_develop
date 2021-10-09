@@ -75,14 +75,14 @@ class DatasetImage(Dataset):
         clothes_id = item[3]
         hm_path = item[4]
         img = Image.open(img_path).convert('RGB')
-        # read pose file
-        pose = cv2.imread(hm_path, cv2.IMREAD_GRAYSCALE)
-        pose = pose.reshape((pose.shape[0], 56, -1)).transpose((0,2,1)).astype('float32')
-        pose[:,:,18:] = np.abs(pose[:,:,18:]-128)
+        if self.transform is not None:
+            img = self.transform(img)
+        # read heatmap
+        heatmap = np.load(hm_path)
+        heatmap = torch.from_numpy(heatmap)
+
         # transform
-        img, pose = self.transform[1](img, pose)
-        img = self.transform[0](img)
-        return img, p_id, cam_id, clothes_id, pose
+        return img, p_id, cam_id, clothes_id, heatmap
 
 
 class DatasetVideo(Dataset):
