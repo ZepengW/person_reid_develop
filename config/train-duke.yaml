@@ -1,18 +1,14 @@
 mode: train_test
 gpu: [0]
-task-name: MaskFormer-v1-duke
+task-name: JointFormer-v0.3-duke
 
 network-params:
-  name: MaskFormer-v1-duke
-  lr: 0.1
-  lr-adjust:
-    - 10
-    - 30
-    - 100
+  name: JointFormer-v0.3-duke
+  lr: 0.0001
   weight_decay: 0.0003
-  epoch: 128
+  epoch: 120
   continue_train: False
-  optimzer: SGD
+  optimzer: Adam
   vit-pretrained-path: ./pretrained/jx_vit_base_p16_224-80ecf9dd.pth
   camera-num: 15
   re_ranking: True
@@ -25,5 +21,5 @@ dataset:
     - 384
     - 128
   num_workers: 8
-  batch_size: 16
+  batch_size: 64
   type: image
