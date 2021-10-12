@@ -36,9 +36,6 @@ def main(config, writer_tensorboardX):
     eval_interval = config.get('eval_interval', 20)
 
     ### pre transform methods on images
-    t = tf.build_transforms()
-    t_mask = tf.build_transforms_mask()
-
     dataset_config = config.get('dataset', dict())
     ### pre transform methods on images
     size = dataset_config.get('image_size', [256,128])

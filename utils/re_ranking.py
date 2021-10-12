@@ -144,11 +144,7 @@ def re_ranking(probFea, galFea, k1, k2, lambda_value, local_distmat=None, only_l
 
 
 
-<<<<<<< HEAD
-# this is reranking for 
-=======
 # this is reranking for
->>>>>>> main
 def re_ranking_optimize(q_g_dist, q_q_dist, g_g_dist, k1=20, k2=6, lambda_value=0.3):
 
     # The following naming, e.g. gallery_num, is different from outer scope.
