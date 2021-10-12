@@ -58,10 +58,10 @@ class ModelManager:
             params += [{"params": [value], "lr": self.lr, "weight_decay": self.weight_decay}]
         self.optimizer = getattr(torch.optim, cfg.get('optimzer', 'Adam'))(params)
 
-        # metric 
-        self.metrics = cfg.get('metric','euclidean')
+        # metric
+        self.metrics = cfg.get('metric', 'euclidean')
         self.re_ranking = cfg.get('re_ranking', True)
-        # tensorboardX
+        #tensorboardX
         self.writer = writer
 
 
@@ -97,7 +97,7 @@ class ModelManager:
         torch.save(model.state_dict(), './output/' + name + '_' + str(epoch) + '.pkl')
         logging.info('save model success: ' + './output/' + name + '_' + str(epoch) + '.pkl')
 
-    def train(self, dataloader: DataLoader, epoch, is_vis= False):
+    def train(self, dataloader: DataLoader, epoch, is_vis = False):
         logging.info("training epoch : " + str(epoch))
         self.adjust_lr(epoch)
         self.net.train()
@@ -155,7 +155,7 @@ class ModelManager:
                 self.writer.add_embedding(features_vis, metadata=pids_l, global_step=epoch, tag='train')
         self.save_model(self.net, self.model_name, epoch)
 
-    def test(self, queryLoader: DataLoader, galleryLoader: DataLoader, epoch=0, is_vis= True):
+    def test(self, queryLoader: DataLoader, galleryLoader: DataLoader, epoch = 0, is_vis = False):
         logging.info("begin to test")
         self.net.eval()
         gf = []
@@ -191,8 +191,6 @@ class ModelManager:
         qf = torch.cat(qf, dim=0)
 
         logging.info("compute rank list and score")
-        qf = qf.cpu()
-        gf = gf.cpu()
         distmat = compute_dis_matrix(qf,gf,self.metrics, self.re_ranking)
         # standard mode
         cmc_s, mAP_s, mINP_s = eval_func(distmat, qPids, gPids, qCids, gCids)
@@ -219,7 +217,7 @@ class ModelManager:
             # feature visualization
             if is_vis:
                 features_test = torch.cat([gf, qf])
-                labels = [str(s) + '_g' for s in gPids.tolist()] + [str(s) + '_q' for s in qPids.tolist()]
+                labels = gPids.tolist() + qPids.tolist()
                 self.writer.add_embedding(features_test, metadata=labels, global_step=epoch, tag='test')
 
     def adjust_lr(self, epoch):

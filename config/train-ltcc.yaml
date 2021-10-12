@@ -1,6 +1,9 @@
-mode: train_test
+mode: train
 gpu: [0]
 task-name: MaskFormer-v1-ltcc
+eval_interval: 20 # eval each [eval_interval]
+vis: True       # visualize feature distribution
+vis_interval: 20  # visualization each [vis_interval]
 
 network-params:
   name: MaskFormer-v1-ltcc-2
@@ -11,6 +14,7 @@ network-params:
   optimzer: SGD
   vit-pretrained-path: ./pretrained/jx_vit_base_p16_224-80ecf9dd.pth
   camera-num: 12
+  re_ranking: True
 
 dataset:
   dataset_name: ltcc

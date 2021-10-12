@@ -1,6 +1,9 @@
 mode: train
 gpu: [0]
 task-name: MaskFormer-v1-msmt17
+eval_interval: 20 # eval each [eval_interval]
+vis: True       # visualize feature distribution
+vis_interval: 20  # visualization each [vis_interval]
 
 network-params:
   name: MaskFormer-v1-msmt17-Adam
