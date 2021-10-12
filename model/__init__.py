@@ -7,7 +7,7 @@ from utils.eval_reid import eval_func
 from utils.triplet_loss import CrossEntropyLabelSmooth, WeightedRegularizedTriplet
 from utils.center_loss import CenterLoss
 import numpy as np
-from utils.re_ranking import re_ranking
+from utils.re_ranking import re_ranking, compute_dis_matrix
 from model.net.resnet import resnet50
 from tensorboardX import SummaryWriter
 
@@ -48,6 +48,9 @@ class ModelManager:
             params += [{"params": [value], "lr": self.lr, "weight_decay": self.weight_decay}]
         self.optimizer = getattr(torch.optim, cfg.get('optimzer', 'Adam'))(params)
 
+        # metric
+        self.metrics = cfg.get('metric', 'euclidean')
+        self.re_ranking = cfg.get('re_ranking', True)
         #tensorboardX
         self.writer = writer
 
@@ -83,7 +86,7 @@ class ModelManager:
         torch.save(model.state_dict(), './output/' + name + '_' + str(epoch) + '.pkl')
         logging.info('save model success: ' + './output/' + name + '_' + str(epoch) + '.pkl')
 
-    def train(self, dataloader: DataLoader, epoch):
+    def train(self, dataloader: DataLoader, epoch, is_vis = False):
         logging.info("training epoch : " + str(epoch))
         self.adjust_lr(epoch)
         self.net.train()
@@ -115,10 +118,11 @@ class ModelManager:
                      .format(epoch, np.mean(total_loss_array[0])))
         if self.writer is not None:
             self.writer.add_scalar('train/loss', np.mean(total_loss_array[0]), epoch)
-            self.writer.add_embedding(features_vis, metadata=pids_l, global_step=epoch, tag='train')
+            if is_vis:
+                self.writer.add_embedding(features_vis, metadata=pids_l, global_step=epoch, tag='train')
         self.save_model(self.net, self.model_name, epoch)
 
-    def test(self, queryLoader: DataLoader, galleryLoader: DataLoader, epoch = 0):
+    def test(self, queryLoader: DataLoader, galleryLoader: DataLoader, epoch = 0, is_vis = False):
         logging.info("begin to test")
         self.net.eval()
         gf = []
@@ -153,7 +157,7 @@ class ModelManager:
         #           torch.pow(gf, 2).sum(dim=1, keepdim=True).expand(n, m).t()
         # distmat.addmm_(qf, gf.t(),beta = 1, alpha = -2)
         # distmat = distmat.cpu().numpy()
-        distmat = re_ranking(qf, gf, k1=20, k2=6, lambda_value=0.3)
+        distmat = compute_dis_matrix(qf,gf,self.metrics, self.re_ranking)
         cmc, mAP, mINP = eval_func(distmat, qPids, gPids, qCids, gCids)
         logging.info("test result:[rank-1:{:.2%}],[rank-3:{:.2%}],[rank-5:{:.2%}],[rank-10:{:.2%}]"
                      .format(cmc[0], cmc[2], cmc[4], cmc[9]))
@@ -162,12 +166,13 @@ class ModelManager:
             self.writer.add_scalar('test/rank-1', cmc[0], epoch)
             self.writer.add_scalar('test/mAP', mAP, epoch)
             self.writer.add_scalar('test/mINP', mINP, epoch)
-            for i, p in enumerate(cmc):
-                self.writer.add_scalar(f'test-cmc/e{epoch}',p,i)
+            # for i, p in enumerate(cmc):
+            #     self.writer.add_scalar(f'test-cmc/e{epoch}',p,i)
             # feature visualization
-            features_test = torch.cat([gf,qf])
-            labels = [str(s)+'_g' for s in gPids.tolist()] + [str(s)+'_q' for s in qPids.tolist()]
-            self.writer.add_embedding(features_test, metadata=labels, global_step=epoch, tag='test')
+            if is_vis:
+                features_test = torch.cat([gf,qf])
+                labels = gPids.tolist() + qPids.tolist()
+                self.writer.add_embedding(features_test, metadata=labels, global_step=epoch, tag='test')
 
 
     def adjust_lr(self, epoch):

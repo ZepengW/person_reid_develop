@@ -1,5 +1,8 @@
-mode: train_test
+mode: train
 gpu: [0]
+eval_interval: 20 # eval each [eval_interval]
+vis: True       # visualize feature distribution
+vis_interval: 20  # visualization each [vis_interval]
 
 network-params:
   name: resnet50-duke
@@ -13,6 +16,7 @@ network-params:
   epoch: 64
   continue_train: True
   optimzer: Adam
+  re_ranking: False
 
 dataset:
   dataset_name: duke

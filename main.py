@@ -31,6 +31,10 @@ def set_gpus_env(gpu_ids):
 
 def main(config, writer_tensorboardX):
     device = set_gpus_env(config.get('gpu', [0]))
+    vis_bool = config.get('vis', False)     # draw feature distribution
+    vis_interval = config.get('vis_interval', 20)    # interval of drawing feature distribution
+    eval_interval = config.get('eval_interval', 20)
+
     ### pre transform methods on images
     t = tf.build_transforms()
     t_mask = tf.build_transforms_mask()
@@ -57,10 +61,30 @@ def main(config, writer_tensorboardX):
             shuffle=True
         )
         logging.info("load train data finish")
+        logging.info("loading test data")
+        loader_gallery_source = DataLoader(
+            get_dataset('test', transform=t),
+            batch_size=dataset_config.get('batch_size', 16),
+            num_workers=dataset_config.get('num_workers', 8),
+            drop_last=False,
+            shuffle=True
+        )
+        loader_query_source = DataLoader(
+            get_dataset('query', transform=t),
+            batch_size=dataset_config.get('batch_size', 16),
+            num_workers=dataset_config.get('num_workers', 8),
+            drop_last=False,
+            shuffle=True
+        )
+        logging.info("load test data finish")
         logging.info("prepare to train from epoch[{0}] to epoch[{1}]".format(model.trained_epoches,
                                                                              model_config.get('epoch', 64) - 1))
         for i in range(model.trained_epoches, model_config.get('epoch', 64)):
-            model.train(loader_train_source, i)
+            is_vis = (i % vis_interval == 0 or i == model_config.get('epoch', 64) - 1) #each vis_interval or last epoch
+            is_vis = is_vis and vis_bool
+            model.train(loader_train_source, i, is_vis)
+            if (i % eval_interval == 0 and i != 0) or i == model_config.get('epoch', 64) - 1:
+                model.test(loader_query_source, loader_gallery_source, epoch=i, is_vis=vis_bool)
     elif 'test' == mode:
         logging.info("loading test data")
         loader_gallery_source = DataLoader(
@@ -78,39 +102,9 @@ def main(config, writer_tensorboardX):
             shuffle=True
         )
         logging.info("load test data finish")
-        model.test(loader_query_source, loader_gallery_source)
-    elif 'train_test' == mode:
-        logging.info("loading train data")
-        loader_train_source = DataLoader(
-            get_dataset('train', transform=t, transform_mask=t_mask),
-            batch_size=dataset_config.get('batch_size', 16),
-            num_workers=dataset_config.get('num_workers', 8),
-            drop_last=False,
-            shuffle=True
-        )
-        logging.info("load train data finish")
-        logging.info("loading test data")
-        loader_gallery_source = DataLoader(
-            get_dataset('test', transform=t, transform_mask=t_mask),
-            batch_size=dataset_config.get('batch_size', 16),
-            num_workers=dataset_config.get('num_workers', 8),
-            drop_last=False,
-            shuffle=True
-        )
-        loader_query_source = DataLoader(
-            get_dataset('query', transform=t, transform_mask=t_mask),
-            batch_size=dataset_config.get('batch_size', 16),
-            num_workers=dataset_config.get('num_workers', 8),
-            drop_last=False,
-            shuffle=True
-        )
-        logging.info("load test data finish")
-        logging.info("prepare to train from epoch[{0}] to epoch[{1}]".format(model.trained_epoches,
-                                                                             model_config.get('epoch', 64) - 1))
-        for i in range(model.trained_epoches, model_config.get('epoch', 64)):
-            model.train(loader_train_source, i)
-            if i % 10 == 0:
-                model.test(loader_query_source, loader_gallery_source, epoch=i)
+        model.test(loader_query_source, loader_gallery_source, is_vis=vis_bool)
+    else:
+        logging.error(f'not support mode:{mode}')
 
     logging.info("finish!")
 
@@ -123,7 +117,7 @@ def init_logging(task_name=''):
                    + str(datetime.datetime.now().hour).rjust(2, '0') \
                    + str(datetime.datetime.now().minute).rjust(2, '0') \
                    + str(datetime.datetime.now().second).rjust(2, '0')
-    if task_name is not '':
+    if task_name != '':
         log_dir_name = f'{task_name}-{log_dir_name}'
     if not os.path.isdir(f'./output/log/{log_dir_name}'):
         os.mkdir(f'./output/log/{log_dir_name}')

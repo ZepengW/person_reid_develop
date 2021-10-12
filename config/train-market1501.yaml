@@ -1,5 +1,9 @@
-mode: train_test
+mode: train
 gpu: [0]
+eval_interval: 20 # eval each [eval_interval]
+vis: True       # visualize feature distribution
+vis_interval: 20  # visualization each [vis_interval]
+
 
 network-params:
   name: network-market
@@ -13,6 +17,7 @@ network-params:
   epoch: 64
   continue_train: True
   optimzer: Adam
+  re_ranking: True
 
 dataset:
   dataset_name: market
@@ -21,7 +26,5 @@ dataset:
     - 256
     - 128
   num_workers: 8
-  batch_size: 128
-  seq_len: 30
+  batch_size: 32
   type: image
-  num-mask: 6
