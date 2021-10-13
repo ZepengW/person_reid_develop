@@ -18,20 +18,27 @@ class JointFromer(nn.Module):
         # extract feature
         self.feature_map_extract = PCB_Feature(block=Bottleneck, layers=[3,4,6,3])
         # patch embeding
+        self.downsample_global = nn.Conv2d(2048, 1024, kernel_size=1)
         self.downsample = nn.Conv2d(2048, in_planes, kernel_size=1)
-        self.proj = torch.nn.AdaptiveAvgPool2d((1,1))
+        #self.proj = torch.nn.AdaptiveAvgPool2d((1,1))
+        self.proj = torch.nn.AdaptiveMaxPool2d((1,1))
         # vit backbone network
         self.transformer = TransReID(num_classes=num_classes, num_patches=parts,embed_dim=self.in_planes,depth=12, num_heads=12, mlp_ratio=4, qkv_bias=True)
         self.transformer.load_param('./pretrained/jx_vit_base_p16_224-80ecf9dd.pth')
         # bottleneck
-        self.bottleneck = nn.BatchNorm1d(2048)
+        self.bottleneck = nn.BatchNorm1d(1024)
         self.bottleneck.bias.requires_grad_(False)
         self.bottleneck.apply(weights_init_kaiming)
         self.bottleneck_whole = nn.BatchNorm1d(self.in_planes)
         self.bottleneck_whole.bias.requires_grad_(False)
         self.bottleneck_whole.apply(weights_init_kaiming)
+        self.bottleneck_part = nn.BatchNorm1d(self.in_planes)
+        self.bottleneck_part.bias.requires_grad_(False)
+        self.bottleneck_part.apply(weights_init_kaiming)
+        # feature fusion
+        self.feat_fuse = torch.nn.AdaptiveMaxPool1d(1)
         # classify layer
-        self.classify = nn.Linear(self.in_planes + 2048, self.num_classes, bias=False)
+        self.classify = nn.Linear(2 * self.in_planes + 1024, self.num_classes, bias=False)
 
     def forward(self, x, heatmap):
         B = x.shape[0]
@@ -39,6 +46,7 @@ class JointFromer(nn.Module):
         #extract feature
         feat_map = self.feature_map_extract(x)
         feats_global = self.proj(feat_map) # (b, 2048, 1, 1)
+        feats_global = self.downsample_global(feats_global)
         feats_global = feats_global.squeeze()
 
         feat_parts = torch.einsum('bchw,bphw->bpchw',feat_map,heatmap)
@@ -54,7 +62,12 @@ class JointFromer(nn.Module):
         feats_global = self.bottleneck(feats_global)
         feats_whole_vit = feats[:,0]
         feats_whole_vit = self.bottleneck_whole(feats_whole_vit)
-        feats = torch.cat([feats_global, feats_whole_vit], dim=1)
+        feats_part_vit = feats[:,1:]
+        feats_part_vit = feats_part_vit.permute([0,2,1])
+        feats_part_vit = self.feat_fuse(feats_part_vit)
+        feats_part_vit = feats_part_vit.squeeze()
+        feats_part_vit = self.bottleneck_part(feats_part_vit)
+        feats = torch.cat([feats_global, feats_whole_vit, feats_part_vit], dim=1)
         # output
         if self.training:
             score = self.classify(feats)

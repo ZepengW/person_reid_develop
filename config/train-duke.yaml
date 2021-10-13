@@ -1,15 +1,15 @@
 mode: train
 gpu: [0]
-task-name: JointFormer-v0.3-duke
+task-name: JointFormer-v0.4-duke
 eval_interval: 20 # eval each [eval_interval]
-vis: True       # visualize feature distribution
+vis: False       # visualize feature distribution
 vis_interval: 20  # visualization each [vis_interval]
 
 network-params:
-  name: JointFormer-v0.3-duke
-  lr: 0.0001
+  name: JointFormer-v0.4-duke
+  lr: 0.0008
   weight_decay: 0.0003
-  epoch: 120
+  epoch: 128
   continue_train: False
   optimzer: Adam
   vit-pretrained-path: ./pretrained/jx_vit_base_p16_224-80ecf9dd.pth
