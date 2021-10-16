@@ -6,22 +6,25 @@ from model.net.backbones.vit_pytorch import TransReID
 import copy
 import torch
 
+
 class JointFromer(nn.Module):
     '''
     Joint Transformer v0.1
     '''
-    def __init__(self, num_classes, parts = 18, in_planes = 768):
+
+    def __init__(self, num_classes, parts=18, in_planes=768):
         super(JointFromer, self).__init__()
         self.parts = parts
         self.num_classes = num_classes
         self.in_planes = in_planes
         # extract feature
-        self.feature_map_extract = nn.Conv2d(3, 768, 26, (10, 6))
+        self.feature_map_extract = nn.Conv2d(3, 768, (26, 30), (10, 14))
         # patch embeding
-        #self.proj = torch.nn.AdaptiveAvgPool2d((1,1))
-        self.proj = torch.nn.AdaptiveMaxPool2d((1,1))
+        # self.proj = torch.nn.AdaptiveAvgPool2d((1,1))
+        self.proj = torch.nn.AdaptiveMaxPool2d((1, 1))
         # vit backbone network
-        self.transformer = TransReID(num_classes=num_classes, num_patches=parts,embed_dim=self.in_planes,depth=12, num_heads=12, mlp_ratio=4, qkv_bias=True, drop_rate = 0.25)
+        self.transformer = TransReID(num_classes=num_classes, num_patches=parts, embed_dim=self.in_planes, depth=12,
+                                     num_heads=12, mlp_ratio=4, qkv_bias=True, drop_rate=0.25)
         self.transformer.load_param('./pretrained/jx_vit_base_p16_224-80ecf9dd.pth')
         block = self.transformer.blocks[-1]
         layer_norm = self.transformer.norm
@@ -55,26 +58,24 @@ class JointFromer(nn.Module):
 
         # body part id
         self.parts_id = [
-            torch.tensor([0, 14, 15, 16, 17]) + 1, # head
-            torch.tensor([1, 2, 3, 4, 5, 6, 7, 8, 11]) + 1, # upper body
-            torch.tensor([8, 9, 10, 11, 12, 13]) + 1 # lower body
+            torch.tensor([0, 14, 15, 16, 17]) + 1,  # head
+            torch.tensor([1, 2, 3, 4, 5, 6, 7, 8, 11]) + 1,  # upper body
+            torch.tensor([8, 9, 10, 11, 12, 13]) + 1  # lower body
         ]
         # add 1 for each part id, because the first vit patch is token
-
-
 
     def forward(self, x, heatmap):
         B = x.shape[0]
         P = heatmap.shape[1]
-        #extract feature
+        # extract feature
         feat_map = self.feature_map_extract(x)
 
-        feat_parts = torch.einsum('bchw,bphw->bpchw',feat_map,heatmap)
+        feat_parts = torch.einsum('bchw,bphw->bpchw', feat_map, heatmap)
         # patch embedding: Means processing for non-zero elements
-        feat_parts = feat_parts.reshape([B*P]+list(feat_parts.shape[2:]))
+        feat_parts = feat_parts.reshape([B * P] + list(feat_parts.shape[2:]))
         feat_parts = self.proj(feat_parts)
         feat_parts = feat_parts.float()
-        feat_parts = feat_parts.reshape(B,P,-1)
+        feat_parts = feat_parts.reshape(B, P, -1)
         # transformer
         feats = self.transformer(feat_parts)
         # bottleneck
@@ -82,30 +83,30 @@ class JointFromer(nn.Module):
         # whole feature
         feats_whole = self.b1(feats)
         feats_whole = feats_whole[:, 0]
-        token = feats[:,0:1]
+        token = feats[:, 0:1]
         # head feature
-        feats_local_head = feats[:,self.parts_id[0]]
-        feats_local_head = self.b2(torch.cat((token,feats_local_head),dim=1))
-        feats_local_head = feats_local_head[:,0]
+        feats_local_head = feats[:, self.parts_id[0]]
+        feats_local_head = self.b2(torch.cat((token, feats_local_head), dim=1))
+        feats_local_head = feats_local_head[:, 0]
         # upper body feature
-        feats_local_upper = feats[:,self.parts_id[1]]
-        feats_local_upper = self.b2(torch.cat((token,feats_local_upper),dim=1))
-        feats_local_upper = feats_local_upper[:,0]
+        feats_local_upper = feats[:, self.parts_id[1]]
+        feats_local_upper = self.b2(torch.cat((token, feats_local_upper), dim=1))
+        feats_local_upper = feats_local_upper[:, 0]
         # lower body feature
-        feats_local_lower = feats[:,self.parts_id[2]]
-        feats_local_lower = self.b2(torch.cat((token,feats_local_lower),dim=1))
-        feats_local_lower = feats_local_lower[:,0]
+        feats_local_lower = feats[:, self.parts_id[2]]
+        feats_local_lower = self.b2(torch.cat((token, feats_local_lower), dim=1))
+        feats_local_lower = feats_local_lower[:, 0]
         # bottleneck
         feats_whole = self.bottleneck_whole(feats_whole)
         feats_local_head = self.bottleneck_1(feats_local_head)
         feats_local_upper = self.bottleneck_2(feats_local_upper)
         feats_local_lower = self.bottleneck_3(feats_local_lower)
         # feature fuse
-        feats = torch.cat([feats_whole,feats_local_head/3,feats_local_upper/3,feats_local_lower/3], dim = 1)
+        feats = torch.cat([feats_whole, feats_local_head / 3, feats_local_upper / 3, feats_local_lower / 3], dim=1)
         # output
         if self.training:
             score = self.classify(feats)
-            return score,feats
+            return score, feats
         else:
             return feats
 
@@ -116,6 +117,7 @@ def weights_init_classifier(m):
         nn.init.normal_(m.weight, std=0.001)
         if m.bias:
             nn.init.constant_(m.bias, 0.0)
+
 
 def weights_init_kaiming(m):
     classname = m.__class__.__name__
@@ -132,11 +134,12 @@ def weights_init_kaiming(m):
             nn.init.constant_(m.weight, 1.0)
             nn.init.constant_(m.bias, 0.0)
 
+
 def shuffle_unit(features, shift, group, begin=1):
     batchsize = features.size(0)
     dim = features.size(-1)
     # Shift Operation
-    feature_random = torch.cat([features[:, begin-1+shift:], features[:, begin:begin-1+shift]], dim=1)
+    feature_random = torch.cat([features[:, begin - 1 + shift:], features[:, begin:begin - 1 + shift]], dim=1)
     x = feature_random
     # Patch Shuffle Operation
     try:
@@ -148,6 +151,7 @@ def shuffle_unit(features, shift, group, begin=1):
     x = torch.transpose(x, 1, 2).contiguous()
     x = x.view(batchsize, -1, dim)
     return x
+
 
 def weights_init_kaiming(m):
     classname = m.__class__.__name__
