@@ -105,6 +105,7 @@ class ModelManager:
         total_loss_array = np.zeros([3, batch_num])
         pids_l = []
         features_vis = []
+        bool_warning = False
         for idx, (imgs, ids, cam_id, _, heatmaps) in enumerate(dataloader):
             self.optimizer.zero_grad()
 
@@ -123,6 +124,7 @@ class ModelManager:
                 total_loss = loss_xent + loss_trip
                 total_loss_array[2][idx] = (loss_trip.cpu())
             else:
+                bool_warning = True
                 total_loss = loss_xent
                 total_loss_array[2][idx] = 0
 
@@ -134,6 +136,9 @@ class ModelManager:
                     f'LOSS=[total:{np.mean(total_loss_array[0,idx-49:idx+1]):.4f} | '
                     f'xent:{np.mean(total_loss_array[1,idx-49:idx+1]):.4f} '
                     f'triplet:{np.mean(total_loss_array[2,idx-49:idx+1]):.4f} ]')
+                if bool_warning:
+                    logging.warning('Exist Inf Triplet Loss')
+                    bool_warning = False
             #logging.info(f'[Epoch:{epoch:0>4d}][Batch:{idx}] LOSS=[total:{total_loss.cpu():.4f} | xent:{loss_xent.cpu():.4f}  triplet:{loss_trip.cpu():.4f} ]')
             # update model
             total_loss.backward()

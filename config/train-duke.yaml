@@ -1,16 +1,16 @@
 mode: train
 gpu: [0]
-task-name: JointFormer-v0.4-duke
-eval_interval: 20 # eval each [eval_interval]
+task-name: JointFormer-v0.5-duke
+eval_interval: 10 # eval each [eval_interval]
 vis: False       # visualize feature distribution
 vis_interval: 20  # visualization each [vis_interval]
 
 network-params:
-  name: JointFormer-v0.4-duke
-  lr: 0.0008
+  name: JointFormer-v0.5-duke
+  lr: 0.0001
   weight_decay: 0.0003
-  epoch: 128
-  continue_train: False
+  epoch: 512
+  continue_train: True
   optimzer: Adam
   vit-pretrained-path: ./pretrained/jx_vit_base_p16_224-80ecf9dd.pth
   camera-num: 15
@@ -20,7 +20,7 @@ dataset:
   dataset_name: duke
   dataset_path: ../dataset/DukeMTMC-reID
   image_size:
-    - 384
+    - 256
     - 128
   num_workers: 8
   batch_size: 64
