@@ -67,6 +67,7 @@ class JointFromer(nn.Module):
     def forward(self, x, heatmap):
         B = x.shape[0]
         P = heatmap.shape[1]
+        heatmap = torch.clamp(heatmap, 0.01, 0.99)
         # extract feature
         feat_map = self.feature_map_extract(x)
 
@@ -81,7 +82,7 @@ class JointFromer(nn.Module):
         # bottleneck
         # split whole feature and partial features extracted by vit
         # whole feature
-        feats_whole = feats[:, 0:1]
+        feats_whole = feats[:, 0]
         # head feature
         feats_local_head = feats[:, self.parts_id[0]]
         feats_local_head = feats_local_head.permute([0,2,1])
