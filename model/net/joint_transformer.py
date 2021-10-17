@@ -9,7 +9,7 @@ import torch
 
 class JointFromer(nn.Module):
     '''
-    Joint Transformer v0.1
+    Joint Transformer
     '''
 
     def __init__(self, num_classes, parts=18, in_planes=768):
@@ -24,7 +24,7 @@ class JointFromer(nn.Module):
         self.proj = torch.nn.AdaptiveMaxPool2d((1, 1))
         # vit backbone network
         self.transformer = TransReID(num_classes=num_classes, num_patches=parts, embed_dim=self.in_planes, depth=12,
-                                     num_heads=12, mlp_ratio=4, qkv_bias=True, drop_rate=0.25)
+                                     num_heads=12, mlp_ratio=4, qkv_bias=True, drop_path_rate=0.1)
         self.transformer.load_param('./pretrained/jx_vit_base_p16_224-80ecf9dd.pth')
         block = self.transformer.blocks[-1]
         layer_norm = self.transformer.norm
@@ -81,21 +81,22 @@ class JointFromer(nn.Module):
         # bottleneck
         # split whole feature and partial features extracted by vit
         # whole feature
-        feats_whole = self.b1(feats)
-        feats_whole = feats_whole[:, 0]
-        token = feats[:, 0:1]
+        feats_whole = feats[:, 0:1]
         # head feature
         feats_local_head = feats[:, self.parts_id[0]]
-        feats_local_head = self.b2(torch.cat((token, feats_local_head), dim=1))
-        feats_local_head = feats_local_head[:, 0]
+        feats_local_head = feats_local_head.permute([0,2,1])
+        feats_local_head = self.feat_fuse(feats_local_head)
+        feats_local_head = feats_local_head.squeeze()
         # upper body feature
         feats_local_upper = feats[:, self.parts_id[1]]
-        feats_local_upper = self.b2(torch.cat((token, feats_local_upper), dim=1))
-        feats_local_upper = feats_local_upper[:, 0]
+        feats_local_upper = feats_local_upper.permute([0,2,1])
+        feats_local_upper = self.feat_fuse(feats_local_upper)
+        feats_local_upper = feats_local_upper.squeeze()
         # lower body feature
         feats_local_lower = feats[:, self.parts_id[2]]
-        feats_local_lower = self.b2(torch.cat((token, feats_local_lower), dim=1))
-        feats_local_lower = feats_local_lower[:, 0]
+        feats_local_lower = feats_local_lower.permute([0,2,1])
+        feats_local_lower = self.feat_fuse(feats_local_lower)
+        feats_local_lower = feats_local_lower.squeeze()
         # bottleneck
         feats_whole = self.bottleneck_whole(feats_whole)
         feats_local_head = self.bottleneck_1(feats_local_head)
