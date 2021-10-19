@@ -91,19 +91,19 @@ class TripletLoss(object):
     Related Triplet Loss theory can be found in paper 'In Defense of the Triplet
     Loss for Person Re-Identification'."""
 
-    def __init__(self, margin=None):
+    def __init__(self, margin=None, **kwargs):
         self.margin = margin
         if margin is not None:
             self.ranking_loss = nn.MarginRankingLoss(margin=margin)
         else:
             self.ranking_loss = nn.SoftMarginLoss()
 
-    def __call__(self, global_feat, labels, normalize_feature=False):
+    def __call__(self, feats, targets, normalize_feature=False, **kwargs):
         if normalize_feature:
-            global_feat = normalize(global_feat, axis=-1)
-        dist_mat = euclidean_dist(global_feat, global_feat)
+            feats = normalize(feats, axis=-1)
+        dist_mat = euclidean_dist(feats, feats)
         dist_ap, dist_an = hard_example_mining(
-            dist_mat, labels)
+            dist_mat, targets)
         y = dist_an.new().resize_as_(dist_an).fill_(1)
         if self.margin is not None:
             loss = self.ranking_loss(dist_an, dist_ap, y)
@@ -122,14 +122,14 @@ class CrossEntropyLabelSmooth(nn.Module):
         num_classes (int): number of classes.
         epsilon (float): weight.
     """
-    def __init__(self, num_classes, epsilon=0.1, use_gpu=True):
+    def __init__(self, num_classes, epsilon=0.1, use_gpu=True, **kwargs):
         super(CrossEntropyLabelSmooth, self).__init__()
         self.num_classes = num_classes
         self.epsilon = epsilon
         self.use_gpu = use_gpu
         self.logsoftmax = nn.LogSoftmax(dim=1)
 
-    def forward(self, inputs, targets):
+    def forward(self, inputs, targets, **kwargs):
         """
         Args:
             inputs: prediction matrix (before softmax) with shape (batch_size, num_classes)
@@ -153,18 +153,18 @@ def softmax_weights(dist, mask):
 
 class WeightedRegularizedTriplet(object):
 
-    def __init__(self):
+    def __init__(self, **kwargs):
         self.ranking_loss = nn.SoftMarginLoss()
 
-    def __call__(self, global_feat, labels, normalize_feature=False):
+    def __call__(self, feats, targets, normalize_feature=False, **kwargs):
         if normalize_feature:
-            global_feat = normalize(global_feat, axis=-1)
-        dist_mat = euclidean_dist(global_feat, global_feat)
+            feats = normalize(feats, axis=-1)
+        dist_mat = euclidean_dist(feats, feats)
 
         N = dist_mat.size(0)
         # shape [N, N]
-        is_pos = labels.expand(N, N).eq(labels.expand(N, N).t()).float()
-        is_neg = labels.expand(N, N).ne(labels.expand(N, N).t()).float()
+        is_pos = targets.expand(N, N).eq(targets.expand(N, N).t()).float()
+        is_neg = targets.expand(N, N).ne(targets.expand(N, N).t()).float()
 
         # `dist_ap` means distance(anchor, positive)
         # both `dist_ap` and `relative_p_inds` with shape [N, 1]

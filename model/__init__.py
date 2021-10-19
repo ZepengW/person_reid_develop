@@ -5,58 +5,49 @@ import logging
 import torch.nn as nn
 from torch.utils.data import DataLoader
 from utils.eval_reid import eval_func
-from utils.triplet_loss import CrossEntropyLabelSmooth, WeightedRegularizedTriplet, TripletLoss
-from utils.center_loss import CenterLoss
 import numpy as np
 from utils.re_ranking import re_ranking, compute_dis_matrix
-#from model.net.multi_branch_network import MbNetwork
-#from model.net.person_transformer import PersonTransformer
-from model.net.joint_transformer import JointFromer
+from model.model_factory import make_model
 from tensorboardX import SummaryWriter
+import solver
+from loss import make_loss
+
+
 
 
 class ModelManager:
     def __init__(self, cfg: dict, device, class_num=1000, writer: SummaryWriter = None):
         self.device = device
         self.model_name = cfg.get('name', 'default-network')
-        self.graph_nodes_num = 6
 
         # model load
         # add your own network here
-        # self.net = PersonTransformer(num_classes=class_num,camera_num=cfg.get('camera-num'),
-        #                              vit_pretrained_path=cfg.get('vit-pretrained-path',None),
-        #                              mask_embed= cfg.get('mask_embed', True))
-        self.net = JointFromer(num_classes=class_num)
-        self.mask_embed = cfg.get('mask_embed', True)
+        self.net = make_model(cfg.get('network_name'),cfg.get('network-params',dict()))
 
         # Multi-GPU Set
         if torch.cuda.device_count() > 1:
             self.net = nn.DataParallel(self.net)
         self.net.to(self.device)
 
+        self.trained_epoches = 0
         # load model trained before
-        if cfg.get('continue_train', True):
-            self.trained_epoches = self.load_model(self.net, self.model_name) + 1
-        else:
-            self.clear_model(self.model_name)
-            self.trained_epoches = 0
+        load_path = cfg.get('load_path', False)
+        if type(load_path) is str:
+            logging.info(f'loading model: {load_path}' )
+            self.net.load_state_dict(torch.load(load_path))
+            logging.info('load finish!')
+        elif type(load_path) is bool:
+            if load_path:
+                self.trained_epoches = self.load_model(self.net, cfg.get('save_name','model-no-name'))
 
         # loss function
-        self.lossesFunction = {}
-        self.lossesFunction['xent'] = CrossEntropyLabelSmooth(class_num)
-        self.lossesFunction['trip_weight'] = WeightedRegularizedTriplet()
+        self.lossesFunction = make_loss(cfg.get('loss'), num_classes = class_num)
 
         # optim
-        self.lr = cfg.get('lr', 0.0001)
-        self.lr_adjust = cfg.get('lr_adjust', [])
-        self.weight_decay = cfg.get('weight_decay', 0.0005)
-        params = []
+        self.optimizer, _ = solver.make_optimizer(cfg_solver=cfg.get('solver'), model=self.net)
 
-        for key, value in self.net.named_parameters():
-            if not value.requires_grad:
-                continue
-            params += [{"params": [value], "lr": self.lr, "weight_decay": self.weight_decay}]
-        self.optimizer = getattr(torch.optim, cfg.get('optimzer', 'Adam'))(params)
+        #scheduler for lr
+        self.scheduler = solver.create_scheduler(cfg.get('solver'), self.optimizer)
 
         # metric
         self.metrics = cfg.get('metric', 'euclidean')
@@ -68,12 +59,12 @@ class ModelManager:
     @staticmethod
     def load_model(model, name):
         if not os.path.exists('./output'):
-            logging.warning("load trained model failed")
-            return -1
+            logging.warning("no trained model exist, start from init")
+            return 0
         pkl_l = [n for n in os.listdir('./output') if (name in n and '.pkl' in n)]
         if len(pkl_l) == 0:
             logging.warning("no trained model exist, start from init")
-            return -1
+            return 0
         epoch_longest = max([int(n.split('_')[-1].split('.')[0]) for n in pkl_l])
         file_name = name + '_' + str(epoch_longest) + '.pkl'
         logging.info('loading model: ' + file_name)
@@ -99,10 +90,10 @@ class ModelManager:
 
     def train(self, dataloader: DataLoader, epoch, is_vis = False):
         logging.info("training epoch : " + str(epoch))
-        self.adjust_lr(epoch)
         self.net.train()
         batch_num = len(dataloader)
-        total_loss_array = np.zeros([3, batch_num])
+        total_loss_l = []
+        loss_value_l = []
         pids_l = []
         features_vis = []
         bool_warning = False
@@ -115,31 +106,19 @@ class ModelManager:
                 heatmaps = heatmaps.to(self.device)
             score, feat = self.net(imgs, heatmaps)
             ids = ids.to(self.device)
+            total_loss, loss_value, loss_name = self.lossesFunction(c_global,f,ids)
 
-            # compute loss
-            loss_xent = self.lossesFunction['xent'](score, ids)
-            loss_trip = self.lossesFunction['trip_weight'](feat, ids)[0]
+            total_loss_l.append(float(total_loss.cpu()))
+            loss_value_l.append(loss_value)
 
-            if not torch.isinf(loss_trip):
-                total_loss = loss_xent + loss_trip
-                total_loss_array[2][idx] = (loss_trip.cpu())
-            else:
-                bool_warning = True
-                total_loss = loss_xent
-                total_loss_array[2][idx] = 0
-
-            total_loss_array[0][idx] = (total_loss.cpu())
-            total_loss_array[1][idx] = (loss_xent.cpu())
-            if (idx+1) % 50 == 0:
+            # output intermediate log
+            if (idx + 1) % 50 == 0:
+                loss_avg_batch = np.mean(np.array(loss_value_l[idx + 1 - 50:idx + 1]), axis=0)
+                loss_str_batch = f' '.join([f'[{name}:{loss_avg_batch[i]:.4f}]' for i, name in enumerate(loss_name)])
                 logging.info(
-                    f'[E{epoch:0>4d}|Batch:{idx:0>4d}/{batch_num:0>4d}] '
-                    f'LOSS=[total:{np.mean(total_loss_array[0,idx-49:idx+1]):.4f} | '
-                    f'xent:{np.mean(total_loss_array[1,idx-49:idx+1]):.4f} '
-                    f'triplet:{np.mean(total_loss_array[2,idx-49:idx+1]):.4f} ]')
-                if bool_warning:
-                    logging.warning('Exist Inf Triplet Loss')
-                    bool_warning = False
-            #logging.info(f'[Epoch:{epoch:0>4d}][Batch:{idx}] LOSS=[total:{total_loss.cpu():.4f} | xent:{loss_xent.cpu():.4f}  triplet:{loss_trip.cpu():.4f} ]')
+                    f'[E{epoch:0>4d}|Batch:{idx+1:0>4d}/{batch_num:0>4d}] '
+                    f'LOSS=[total:{np.mean(np.array(total_loss_l[idx + 1 - 50:idx + 1])):.4f}] | ' + loss_str_batch)
+
             # update model
             total_loss.backward()
             self.optimizer.step()
@@ -150,12 +129,16 @@ class ModelManager:
                 f = PCA_svd(feat, 3)
                 features_vis = features_vis + f.tolist()
 
-        logging.info(f'[Epoch:{epoch:0>4d}] LOSS=[total:{np.mean(total_loss_array[0]):.4f} | xent:{np.mean(total_loss_array[1]):.4f}  triplet:{np.mean(total_loss_array[2]):.4f} ]')
-        #logging.info(f'[Epoch:{epoch:0>4d}] LOSS=[total:{np.mean(total_loss_array[0]):.4f} | xent:{np.mean(total_loss_array[1]):.4f}]')
+        #loging the loss
+        total_loss_avg = np.mean(np.array(total_loss_l))
+        logging.info('[Epoch:{:0>4d}] LOSS=[total:{:.4f}]'.format(epoch, total_loss_avg))
+        loss_avg = np.mean(np.array(loss_value_l),axis=0)
+        loss_str = ' '.join([f'[{name}:{loss_avg[i]:.4f}]' for i, name in enumerate(loss_name)])
+        logging.info(f'[Epoch:{epoch:0>4d}] LOSS Detail : '+loss_str)
         if self.writer is not None:
-            self.writer.add_scalar('train/loss', np.mean(total_loss_array[0]), epoch)
-            self.writer.add_scalar('train/loss-xent', np.mean(total_loss_array[1]), epoch)
-            self.writer.add_scalar('train/loss-trip', np.mean(total_loss_array[2]), epoch)
+            self.writer.add_scalar('train/loss', total_loss_avg, epoch)
+            for i, name in enumerate(loss_name):
+                self.writer.add_scalar(f'train/{name}', loss_avg[i], epoch)
             if is_vis:
                 self.writer.add_embedding(features_vis, metadata=pids_l, global_step=epoch, tag='train')
         self.save_model(self.net, self.model_name, epoch)
@@ -224,13 +207,6 @@ class ModelManager:
                 features_test = torch.cat([gf, qf])
                 labels = gPids.tolist() + qPids.tolist()
                 self.writer.add_embedding(features_test, metadata=labels, global_step=epoch, tag='test')
-
-    def adjust_lr(self, epoch):
-        lr = self.lr * (
-                0.1 ** np.sum(epoch >= np.array(self.lr_adjust)))
-        for param_group in self.optimizer.param_groups:
-            param_group['lr'] = lr
-
 
 def PCA_svd(X, k, center=True):
     n = X.size()[0]

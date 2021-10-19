@@ -43,7 +43,7 @@ def main(config, writer_tensorboardX):
     dataset_manager = DatasetManager(dataset_config.get('dataset_name', ''), dataset_config.get('dataset_path', ''),
                                      num_mask=dataset_config.get('num-mask', 6))
 
-    model_config = config.get('network-params', dict())
+    model_config = config.get('model-manager', dict())
     model = ModelManager(model_config, device, class_num=dataset_manager.get_train_pid_num(),
                          writer=writer_tensorboardX)
 
@@ -54,7 +54,7 @@ def main(config, writer_tensorboardX):
         logging.info("loading train data")
         loader_train_source = DataLoader(
             get_dataset('train', transform=t),
-            batch_size=dataset_config.get('batch_size', 16),
+            batch_size=dataset_config.get('batch_size_train', 16),
             num_workers=dataset_config.get('num_workers', 8),
             drop_last=True,
             shuffle=True
@@ -63,14 +63,14 @@ def main(config, writer_tensorboardX):
         logging.info("loading test data")
         loader_gallery_source = DataLoader(
             get_dataset('test', transform=t),
-            batch_size=dataset_config.get('batch_size', 16),
+            batch_size=dataset_config.get('batch_size_test', 16),
             num_workers=dataset_config.get('num_workers', 8),
             drop_last=False,
             shuffle=True
         )
         loader_query_source = DataLoader(
             get_dataset('query', transform=t),
-            batch_size=dataset_config.get('batch_size', 16),
+            batch_size=dataset_config.get('batch_size_test', 16),
             num_workers=dataset_config.get('num_workers', 8),
             drop_last=False,
             shuffle=True
@@ -78,24 +78,24 @@ def main(config, writer_tensorboardX):
         logging.info("load test data finish")
         logging.info("prepare to train from epoch[{0}] to epoch[{1}]".format(model.trained_epoches,
                                                                              model_config.get('epoch', 64) - 1))
-        for i in range(model.trained_epoches, model_config.get('epoch', 64)):
+        for i in range(model.trained_epoches+1, model_config.get('epoch', 64)+1):
             is_vis = (i % vis_interval == 0 or i == model_config.get('epoch', 64) - 1) #each vis_interval or last epoch
             is_vis = is_vis and vis_bool
             model.train(loader_train_source, i, is_vis)
-            if (i % eval_interval == 0 and i != 0) or i == model_config.get('epoch', 64) - 1:
+            if (i % eval_interval == 0) or i == model_config.get('epoch', 64) - 1:
                 model.test(loader_query_source, loader_gallery_source, epoch=i, is_vis=vis_bool)
     elif 'test' == mode:
         logging.info("loading test data")
         loader_gallery_source = DataLoader(
             get_dataset('test', transform=t),
-            batch_size=dataset_config.get('batch_size', 16),
+            batch_size=dataset_config.get('batch_size_test', 16),
             num_workers=dataset_config.get('num_workers', 8),
             drop_last=False,
             shuffle=True
         )
         loader_query_source = DataLoader(
             get_dataset('query', transform=t),
-            batch_size=dataset_config.get('batch_size', 16),
+            batch_size=dataset_config.get('batch_size_test', 16),
             num_workers=dataset_config.get('num_workers', 8),
             drop_last=False,
             shuffle=True
@@ -134,15 +134,26 @@ def init_logging(task_name=''):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--cfg', type=str, default='config/train-mars.yaml', help='the config file(.yaml)')
+    parser.add_argument('--cfg_base', type=str, default='config/cfg-base.yaml', help='the config file(.yaml)')
+    parser.add_argument('--cfg', type=str, default='config/train-market1501.yaml', help='the config file(.yaml)')
 
     config = parser.parse_args()
+    # base config
+    cfg_base_path = config.cfg_base
+    if not os.path.exists(cfg_base_path):
+        logging.error(f'can not find the base config file:{cfg_base_path}')
+    with open(cfg_base_path) as f:
+        cfg = f.read()
+        yaml_cfg = yaml.safe_load(cfg)
+
+    # detail config
     cfg_path = config.cfg
     if not os.path.exists(cfg_path):
         logging.error(f'can not find the config file:{cfg_path}')
     with open(cfg_path) as f:
         cfg = f.read()
-        yaml_cfg = yaml.safe_load(cfg)
+        # todo: 这样融合的话，只会在第一层字典融合，后续进行递归的融合处理
+        yaml_cfg.update(yaml.safe_load(cfg))
 
 
     if not os.path.isdir('./output'):

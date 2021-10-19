@@ -1,0 +1,23 @@
+gpu: [0]
+eval_interval: 20 # eval each [eval_interval]
+vis: True       # visualize feature distribution
+vis_interval: 20  # visualization each [vis_interval]
+
+model-manager:
+  network_name: resnet50 # the network model
+  network-params: # the params used to create model
+    pretrained: True
+  save_name: model  # final model save name is [save_name]_[epoch].pkl
+  #load_path: ./output/test.pkl   # load from './output/test.pkl'
+  #load_path: True        # auto load model with [save_name]
+  #load_path: False       # Do Not Load
+  solver:
+    optimizer: Adam
+    base_lr: 0.0003
+    weight_decay: 0.0003
+    warmup_epochs: 5
+  loss:
+    wrt:
+      weight: 1.0
+    xent_label_smooth:
+      weight: 1.0
