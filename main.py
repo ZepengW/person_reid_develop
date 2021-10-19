@@ -43,7 +43,7 @@ def main(config, writer_tensorboardX):
     dataset_manager = DatasetManager(dataset_config.get('dataset_name', ''), dataset_config.get('dataset_path', ''),
                                      num_mask=dataset_config.get('num-mask', 6))
 
-    model_config = config.get('network-params', dict())
+    model_config = config.get('model-manager', dict())
     model = ModelManager(model_config, device, class_num=dataset_manager.get_train_pid_num(),
                          writer=writer_tensorboardX)
 
@@ -135,15 +135,26 @@ def init_logging(task_name=''):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--cfg', type=str, default='config/train-mars.yaml', help='the config file(.yaml)')
+    parser.add_argument('--cfg_base', type=str, default='config/cfg-base.yaml', help='the config file(.yaml)')
+    parser.add_argument('--cfg', type=str, default='config/train-market1501.yaml', help='the config file(.yaml)')
 
     config = parser.parse_args()
+    # base config
+    cfg_base_path = config.cfg_base
+    if not os.path.exists(cfg_base_path):
+        logging.error(f'can not find the base config file:{cfg_base_path}')
+    with open(cfg_base_path) as f:
+        cfg = f.read()
+        yaml_cfg = yaml.safe_load(cfg)
+
+    # detail config
     cfg_path = config.cfg
     if not os.path.exists(cfg_path):
         logging.error(f'can not find the config file:{cfg_path}')
     with open(cfg_path) as f:
         cfg = f.read()
-        yaml_cfg = yaml.safe_load(cfg)
+        # todo: 这样融合的话，只会在第一层字典融合，后续进行递归的融合处理
+        yaml_cfg.update(yaml.safe_load(cfg))
 
 
     if not os.path.isdir('./output'):

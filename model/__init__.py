@@ -4,12 +4,13 @@ import logging
 import torch.nn as nn
 from torch.utils.data import DataLoader
 from utils.eval_reid import eval_func
-from utils.triplet_loss import CrossEntropyLabelSmooth, WeightedRegularizedTriplet
-from utils.center_loss import CenterLoss
 import numpy as np
 from utils.re_ranking import re_ranking, compute_dis_matrix
-from model.net.resnet import resnet50
+from model.model_factory import make_model
 from tensorboardX import SummaryWriter
+import solver
+
+
 
 class ModelManager:
     def __init__(self, cfg: dict, device, class_num=1000, writer: SummaryWriter = None):
@@ -19,7 +20,7 @@ class ModelManager:
 
         # model load
         # add your own network here
-        self.net = resnet50(pretrained=False,num_classes = class_num)
+        self.net = make_model(cfg.get('network_name'),cfg.get('network-params',dict()))
 
         # Multi-GPU Set
         if torch.cuda.device_count() > 1:
@@ -27,26 +28,21 @@ class ModelManager:
         self.net.to(self.device)
 
         # load model trained before
-        if cfg.get('continue_train', True):
-            self.trained_epoches = self.load_model(self.net, self.model_name) + 1
-        else:
-            self.clear_model(self.model_name)
-            self.trained_epoches = 0
+        load_path = cfg.get('load_path', False)
+        if type(load_path) is str:
+            logging.info(f'loading model: {load_path}' )
+            self.net.load_state_dict(torch.load(load_path))
+            logging.info('load finish!')
+        elif type(load_path) is bool:
+            if load_path:
+                self.trained_epoches = self.load_model(self.net, cfg.get('save_name','model-no-name')) + 1
 
         # loss function
         self.lossesFunction = {}
         self.lossesFunction['xent_global'] = nn.CrossEntropyLoss()
 
         # optim
-        self.lr = cfg.get('lr', 0.0001)
-        self.lr_adjust = cfg.get('lr_adjust', [])
-        self.weight_decay = cfg.get('weight_decay', 0.0005)
-        params = []
-        for key, value in self.net.named_parameters():
-            if not value.requires_grad:
-                continue
-            params += [{"params": [value], "lr": self.lr, "weight_decay": self.weight_decay}]
-        self.optimizer = getattr(torch.optim, cfg.get('optimzer', 'Adam'))(params)
+        self.optimizer = solver.make_optimizer(cfg_solver=cfg.get('solver'), model=self.net)
 
         # metric
         self.metrics = cfg.get('metric', 'euclidean')
@@ -57,7 +53,7 @@ class ModelManager:
     @staticmethod
     def load_model(model, name):
         if not os.path.exists('./output'):
-            logging.warning("load trained model failed")
+            logging.warning("no trained model exist, start from init")
             return -1
         pkl_l = [n for n in os.listdir('./output') if (name in n and '.pkl' in n)]
         if len(pkl_l) == 0:

@@ -1,22 +1,4 @@
 mode: train
-gpu: [0]
-eval_interval: 20 # eval each [eval_interval]
-vis: True       # visualize feature distribution
-vis_interval: 20  # visualization each [vis_interval]
-
-network-params:
-  name: resnet50-duke
-  lr: 0.0001
-  lr_adjust:
-    - 20
-    - 40
-    - 60
-    - 90
-  weight_decay: 0.0003
-  epoch: 64
-  continue_train: True
-  optimzer: Adam
-  re_ranking: False
 
 dataset:
   dataset_name: duke
@@ -25,7 +7,8 @@ dataset:
     - 256
     - 128
   num_workers: 8
-  batch_size: 128
+  batch_size_train: 128
+  batch_size_test: 256
   seq_len: 30
   type: image
   num-mask: 6
