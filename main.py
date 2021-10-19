@@ -131,6 +131,30 @@ def init_logging(task_name=''):
     print(f'writing log to ./output/log/{log_dir_name}')
     return log_dir_name
 
+def merge_data(data_1, data_2):
+    """
+    merge data of two nested dict
+    :param data_1:
+    :param data_2: priority
+    :return:
+    """
+    if isinstance(data_1, dict) and isinstance(data_2, dict):
+        new_dict = {}
+        d2_keys = list(data_2.keys())
+        for d1k in data_1.keys():
+            if d1k in d2_keys:
+                d2_keys.remove(d1k)
+                new_dict[d1k] = merge_data(data_1.get(d1k), data_2.get(d1k))
+            else:
+                new_dict[d1k] = data_1.get(d1k)
+        for d2k in d2_keys:
+            new_dict[d2k] = data_2.get(d2k)
+        return new_dict
+    else:
+        if data_2 == None:
+            return data_1
+        else:
+            return data_2
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -144,7 +168,7 @@ if __name__ == '__main__':
         logging.error(f'can not find the base config file:{cfg_base_path}')
     with open(cfg_base_path) as f:
         cfg = f.read()
-        yaml_cfg = yaml.safe_load(cfg)
+        yaml_cfg_base = yaml.safe_load(cfg)
 
     # detail config
     cfg_path = config.cfg
@@ -152,10 +176,9 @@ if __name__ == '__main__':
         logging.error(f'can not find the config file:{cfg_path}')
     with open(cfg_path) as f:
         cfg = f.read()
-        # todo: 这样融合的话，只会在第一层字典融合，后续进行递归的融合处理
-        yaml_cfg.update(yaml.safe_load(cfg))
+        yaml_cfg_detail = yaml.safe_load(cfg)
 
-
+    yaml_cfg = merge_data(yaml_cfg_base,yaml_cfg_detail)
     if not os.path.isdir('./output'):
         os.mkdir('./output')
     if not os.path.isdir('./output/log'):
