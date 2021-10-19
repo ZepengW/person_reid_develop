@@ -79,11 +79,11 @@ def main(config, writer_tensorboardX):
         logging.info("load test data finish")
         logging.info("prepare to train from epoch[{0}] to epoch[{1}]".format(model.trained_epoches,
                                                                              model_config.get('epoch', 64) - 1))
-        for i in range(model.trained_epoches, model_config.get('epoch', 64)):
+        for i in range(model.trained_epoches+1, model_config.get('epoch', 64)+1):
             is_vis = (i % vis_interval == 0 or i == model_config.get('epoch', 64) - 1) #each vis_interval or last epoch
             is_vis = is_vis and vis_bool
             model.train(loader_train_source, i, is_vis)
-            if (i % eval_interval == 0 and i != 0) or i == model_config.get('epoch', 64) - 1:
+            if (i % eval_interval == 0) or i == model_config.get('epoch', 64) - 1:
                 model.test(loader_query_source, loader_gallery_source, epoch=i, is_vis=vis_bool)
     elif 'test' == mode:
         logging.info("loading test data")

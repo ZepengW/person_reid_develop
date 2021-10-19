@@ -17,7 +17,6 @@ class ModelManager:
     def __init__(self, cfg: dict, device, class_num=1000, writer: SummaryWriter = None):
         self.device = device
         self.model_name = cfg.get('name', 'default-network')
-        self.graph_nodes_num = 6
 
         # model load
         # add your own network here
@@ -37,7 +36,7 @@ class ModelManager:
             logging.info('load finish!')
         elif type(load_path) is bool:
             if load_path:
-                self.trained_epoches = self.load_model(self.net, cfg.get('save_name','model-no-name')) + 1
+                self.trained_epoches = self.load_model(self.net, cfg.get('save_name','model-no-name'))
 
         # loss function
         self.lossesFunction = make_loss(cfg.get('loss'), num_classes = class_num)
@@ -58,11 +57,11 @@ class ModelManager:
     def load_model(model, name):
         if not os.path.exists('./output'):
             logging.warning("no trained model exist, start from init")
-            return -1
+            return 0
         pkl_l = [n for n in os.listdir('./output') if (name in n and '.pkl' in n)]
         if len(pkl_l) == 0:
             logging.warning("no trained model exist, start from init")
-            return -1
+            return 0
         epoch_longest = max([int(n.split('_')[-1].split('.')[0]) for n in pkl_l])
         file_name = name + '_' + str(epoch_longest) + '.pkl'
         logging.info('loading model: ' + file_name)
@@ -90,7 +89,8 @@ class ModelManager:
         logging.info("training epoch : " + str(epoch))
         self.net.train()
         batch_num = len(dataloader)
-        total_loss_array = np.zeros([1, batch_num])
+        total_loss_l = []
+        loss_value_l = []
         pids_l = []
         features_vis = []
         for idx, (imgs, ids, _, _) in enumerate(dataloader):
@@ -100,9 +100,19 @@ class ModelManager:
             imgs = imgs.to(self.device)
             c_global, f = self.net(imgs)
             ids = ids.to(self.device)
-            total_loss = self.lossesFunction(c_global,f,ids)
+            total_loss, loss_value, loss_name = self.lossesFunction(c_global,f,ids)
 
-            total_loss_array[0][idx] = (total_loss.cpu())
+            total_loss_l.append(float(total_loss.cpu()))
+            loss_value_l.append(loss_value)
+
+            # output intermediate log
+            if (idx + 1) % 50 == 0:
+                loss_avg_batch = np.mean(np.array(loss_value_l[idx + 1 - 50:idx + 1]), axis=0)
+                loss_str_batch = f' '.join([f'[{name}:{loss_avg_batch[i]:.4f}]' for i, name in enumerate(loss_name)])
+                logging.info(
+                    f'[E{epoch:0>4d}|Batch:{idx+1:0>4d}/{batch_num:0>4d}] '
+                    f'LOSS=[total:{np.mean(np.array(total_loss_l[idx + 1 - 50:idx + 1])):.4f}] | ' + loss_str_batch)
+
             # update model
             total_loss.backward()
             self.optimizer.step()
@@ -112,10 +122,16 @@ class ModelManager:
             f = PCA_svd(f,3)
             features_vis = features_vis + f.tolist()
 
-        logging.info('[Epoch:{:0>4d}] LOSS=[total:{:.4f}]'
-                     .format(epoch, np.mean(total_loss_array[0])))
+        #loging the loss
+        total_loss_avg = np.mean(np.array(total_loss_l))
+        logging.info('[Epoch:{:0>4d}] LOSS=[total:{:.4f}]'.format(epoch, total_loss_avg))
+        loss_avg = np.mean(np.array(loss_value_l),axis=0)
+        loss_str = ' '.join([f'[{name}:{loss_avg[i]:.4f}]' for i, name in enumerate(loss_name)])
+        logging.info(f'[Epoch:{epoch:0>4d}] LOSS Detail : '+loss_str)
         if self.writer is not None:
-            self.writer.add_scalar('train/loss', np.mean(total_loss_array[0]), epoch)
+            self.writer.add_scalar('train/loss', total_loss_avg, epoch)
+            for i, name in enumerate(loss_name):
+                self.writer.add_scalar(f'train/{name}', loss_avg[i], epoch)
             if is_vis:
                 self.writer.add_embedding(features_vis, metadata=pids_l, global_step=epoch, tag='train')
         self.save_model(self.net, self.model_name, epoch)
