@@ -12,7 +12,7 @@ class JointFromer(nn.Module):
     Joint Transformer
     '''
 
-    def __init__(self, num_classes, parts=18, in_planes=768):
+    def __init__(self, num_classes, parts=18, in_planes=768, **kwargs):
         super(JointFromer, self).__init__()
         self.parts = parts
         self.num_classes = num_classes

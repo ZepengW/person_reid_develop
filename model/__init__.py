@@ -22,7 +22,9 @@ class ModelManager:
 
         # model load
         # add your own network here
-        self.net = make_model(cfg.get('network_name'),cfg.get('network-params',dict()))
+        network_params = cfg.get('network-params',dict())
+        network_params['num_classes'] = class_num
+        self.net = make_model(cfg.get('network_name'),network_params)
 
         # Multi-GPU Set
         if torch.cuda.device_count() > 1:
@@ -102,11 +104,10 @@ class ModelManager:
 
             # extract body part features
             imgs = imgs.to(self.device)
-            if self.mask_embed:
-                heatmaps = heatmaps.to(self.device)
+            heatmaps = heatmaps.to(self.device)
             score, feat = self.net(imgs, heatmaps)
             ids = ids.to(self.device)
-            total_loss, loss_value, loss_name = self.lossesFunction(c_global,f,ids)
+            total_loss, loss_value, loss_name = self.lossesFunction(score,feat,ids)
 
             total_loss_l.append(float(total_loss.cpu()))
             loss_value_l.append(loss_value)

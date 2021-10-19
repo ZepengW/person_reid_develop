@@ -1,8 +1,10 @@
 import logging
 from .net.resnet import resnet50
+from .net.joint_transformer import JointFromer
 
 __factory_model = {
-    'resnet50': resnet50
+    'resnet50': resnet50,
+    'jointformer': JointFromer
 }
 
 
