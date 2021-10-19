@@ -55,7 +55,7 @@ def main(config, writer_tensorboardX):
         logging.info("loading train data")
         loader_train_source = DataLoader(
             get_dataset('train', transform=t, transform_mask=t_mask),
-            batch_size=dataset_config.get('batch_size', 16),
+            batch_size=dataset_config.get('batch_size_train', 16),
             num_workers=dataset_config.get('num_workers', 8),
             drop_last=False,
             shuffle=True
@@ -64,14 +64,14 @@ def main(config, writer_tensorboardX):
         logging.info("loading test data")
         loader_gallery_source = DataLoader(
             get_dataset('test', transform=t),
-            batch_size=dataset_config.get('batch_size', 16),
+            batch_size=dataset_config.get('batch_size_test', 16),
             num_workers=dataset_config.get('num_workers', 8),
             drop_last=False,
             shuffle=True
         )
         loader_query_source = DataLoader(
             get_dataset('query', transform=t),
-            batch_size=dataset_config.get('batch_size', 16),
+            batch_size=dataset_config.get('batch_size_test', 16),
             num_workers=dataset_config.get('num_workers', 8),
             drop_last=False,
             shuffle=True
@@ -89,14 +89,14 @@ def main(config, writer_tensorboardX):
         logging.info("loading test data")
         loader_gallery_source = DataLoader(
             get_dataset('test', transform=t, transform_mask=t_mask),
-            batch_size=dataset_config.get('batch_size', 16),
+            batch_size=dataset_config.get('batch_size_test', 16),
             num_workers=dataset_config.get('num_workers', 8),
             drop_last=False,
             shuffle=True
         )
         loader_query_source = DataLoader(
             get_dataset('query', transform=t, transform_mask=t_mask),
-            batch_size=dataset_config.get('batch_size', 16),
+            batch_size=dataset_config.get('batch_size_test', 16),
             num_workers=dataset_config.get('num_workers', 8),
             drop_last=False,
             shuffle=True

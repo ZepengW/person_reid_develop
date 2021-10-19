@@ -16,3 +16,8 @@ model-manager:
     base_lr: 0.0003
     weight_decay: 0.0003
     warmup_epochs: 5
+  loss:
+    wrt:
+      weight: 1.0
+    xent_label_smooth:
+      weight: 1.0

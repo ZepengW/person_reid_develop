@@ -9,6 +9,7 @@ from utils.re_ranking import re_ranking, compute_dis_matrix
 from model.model_factory import make_model
 from tensorboardX import SummaryWriter
 import solver
+from loss import make_loss
 
 
 
@@ -27,6 +28,7 @@ class ModelManager:
             self.net = nn.DataParallel(self.net)
         self.net.to(self.device)
 
+        self.trained_epoches = 0
         # load model trained before
         load_path = cfg.get('load_path', False)
         if type(load_path) is str:
@@ -38,11 +40,13 @@ class ModelManager:
                 self.trained_epoches = self.load_model(self.net, cfg.get('save_name','model-no-name')) + 1
 
         # loss function
-        self.lossesFunction = {}
-        self.lossesFunction['xent_global'] = nn.CrossEntropyLoss()
+        self.lossesFunction = make_loss(cfg.get('loss'), num_classes = class_num)
 
         # optim
-        self.optimizer = solver.make_optimizer(cfg_solver=cfg.get('solver'), model=self.net)
+        self.optimizer, _ = solver.make_optimizer(cfg_solver=cfg.get('solver'), model=self.net)
+
+        #scheduler for lr
+        self.scheduler = solver.create_scheduler(cfg.get('solver'), self.optimizer)
 
         # metric
         self.metrics = cfg.get('metric', 'euclidean')
@@ -84,7 +88,6 @@ class ModelManager:
 
     def train(self, dataloader: DataLoader, epoch, is_vis = False):
         logging.info("training epoch : " + str(epoch))
-        self.adjust_lr(epoch)
         self.net.train()
         batch_num = len(dataloader)
         total_loss_array = np.zeros([1, batch_num])
@@ -97,8 +100,7 @@ class ModelManager:
             imgs = imgs.to(self.device)
             c_global, f = self.net(imgs)
             ids = ids.to(self.device)
-            loss_xent_global = self.lossesFunction['xent_global'](c_global, ids)
-            total_loss = loss_xent_global
+            total_loss = self.lossesFunction(c_global,f,ids)
 
             total_loss_array[0][idx] = (total_loss.cpu())
             # update model
@@ -169,13 +171,6 @@ class ModelManager:
                 features_test = torch.cat([gf,qf])
                 labels = gPids.tolist() + qPids.tolist()
                 self.writer.add_embedding(features_test, metadata=labels, global_step=epoch, tag='test')
-
-
-    def adjust_lr(self, epoch):
-        lr = self.lr * (
-                0.1 ** np.sum(epoch >= np.array(self.lr_adjust)))
-        for param_group in self.optimizer.param_groups:
-            param_group['lr'] = lr
 
 def PCA_svd(X, k, center=True):
     n = X.size()[0]

@@ -33,7 +33,7 @@ def make_optimizer(cfg_solver:dict, model, center_criterion= None):
         optimizer = torch.optim.AdamW(params, lr=cfg_solver.get('base_lr', 0.0003),
                                       weight_decay=cfg_solver.get('weight_decay', 0.0005))
     else:
-        optimizer = getattr(torch.optim, cfg_solver.get('base_lr', 0.0003))(params)
+        optimizer = getattr(torch.optim, optimizer)(params)
 
     if not center_criterion is None:
         optimizer_center = torch.optim.SGD(center_criterion.parameters(), lr= cfg_solver.get('center_lr', 0.5))
