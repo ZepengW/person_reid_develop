@@ -38,7 +38,7 @@ def make_loss(loss_cfg: dict, **params):
             if isinstance(loss_value,tuple):    # triplet loss return 3-tuple
                 loss_value = loss_value[0]
             total_loss += loss_weight_l[i] * loss_value
-            loss_value_l.append(loss_value.cpu())
+            loss_value_l.append(float(loss_value.cpu()))
             loss_name.append(loss_name_l[i])
         return total_loss, loss_value_l, loss_name
 

@@ -1,9 +1,11 @@
 mode: train
-task-name: JointFormer-v0.5-duke
+task-name: JointFormer-v0.5.3-duke
 
 
 model-manager:
   network_name: jointformer # the network model
+  save_name: JointFormer-v0.5.3
+  epoch: 120
 dataset:
   dataset_name: duke
   dataset_path: ../dataset/DukeMTMC-reID
@@ -11,6 +13,6 @@ dataset:
     - 256
     - 128
   num_workers: 8
-  batch_size_train: 16
-  batch_size_test: 32
+  batch_size_train: 256
+  batch_size_test: 256
   type: image
