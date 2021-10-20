@@ -91,7 +91,6 @@ class ModelManager:
         logging.info('save model success: ' + './output/' + name + '_' + str(epoch) + '.pkl')
 
     def train(self, dataloader: DataLoader, epoch, is_vis = False):
-        logging.info("training epoch : " + str(epoch))
         self.net.train()
         batch_num = len(dataloader)
         total_loss_l = []
@@ -99,6 +98,9 @@ class ModelManager:
         pids_l = []
         features_vis = []
         bool_warning = False
+        # learning rate adjust
+        self.scheduler.step(epoch)
+        logging.info(f"Epoch [{epoch}] Training... Base Lr:{self.scheduler._get_lr(epoch)[0]}")
         for idx, (imgs, ids, cam_id, _, heatmaps) in enumerate(dataloader):
             self.optimizer.zero_grad()
 
