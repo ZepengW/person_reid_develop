@@ -1,6 +1,6 @@
 gpu: [0]
 eval_interval: 20 # eval each [eval_interval]
-vis: True       # visualize feature distribution
+vis: False       # visualize feature distribution
 vis_interval: 20  # visualization each [vis_interval]
 
 model-manager:
@@ -12,12 +12,13 @@ model-manager:
   #load_path: True        # auto load model with [save_name]
   #load_path: False       # Do Not Load
   solver:
-    optimizer: Adam
-    base_lr: 0.0003
+    optimizer: SGD
+    base_lr: 0.01
     weight_decay: 0.0003
     warmup_epochs: 5
+    max_epoch: 120
   loss:
     wrt:
-      weight: 1.0
+      weight: 0.1
     xent_label_smooth:
-      weight: 1.0
+      weight: 0.9

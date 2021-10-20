@@ -5,7 +5,20 @@ task-name: JointFormer-v0.5.3-duke
 model-manager:
   network_name: jointformer # the network model
   save_name: JointFormer-v0.5.3
-  epoch: 120
+  epoch: 512
+  solver:
+    optimizer: SGD
+    base_lr: 0.01
+    weight_decay: 0.0003
+    warmup_epochs: 5
+    max_epoch: 512
+  loss:
+    wrt:
+      weight: 0.1
+    xent_label_smooth:
+      weight: 0.9
+
+
 dataset:
   dataset_name: duke
   dataset_path: ../dataset/DukeMTMC-reID
@@ -16,3 +29,5 @@ dataset:
   batch_size_train: 256
   batch_size_test: 256
   type: image
+
+
