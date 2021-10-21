@@ -83,7 +83,7 @@ def main(config, writer_tensorboardX):
             is_vis = (i % vis_interval == 0 or i == model_config.get('epoch', 64) - 1) #each vis_interval or last epoch
             is_vis = is_vis and vis_bool
             model.train(loader_train_source, i, is_vis)
-            if (i % eval_interval == 0) or i == model_config.get('epoch', 64) - 1:
+            if (i % eval_interval == 0) or i == model_config.get('epoch', 64):
                 model.test(loader_query_source, loader_gallery_source, epoch=i, is_vis=vis_bool)
     elif 'test' == mode:
         logging.info("loading test data")
