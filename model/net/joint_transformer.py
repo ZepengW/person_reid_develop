@@ -20,7 +20,7 @@ class JointFromer(nn.Module):
         # extract feature
         self.feature_map_extract = nn.Conv2d(3, 768, (26, 30), (10, 14))
         # patch embeding
-        # self.proj = torch.nn.AdaptiveAvgPool2d((1,1))
+        self.avg_pool = torch.nn.AdaptiveAvgPool2d((1,1))
         self.proj = torch.nn.AdaptiveMaxPool2d((1, 1))
         # vit backbone network
         self.transformer = TransReID(num_classes=num_classes, num_patches=parts, embed_dim=self.in_planes, depth=12,
@@ -55,6 +55,7 @@ class JointFromer(nn.Module):
         self.feat_fuse = torch.nn.AdaptiveMaxPool1d(1)
         # classify layer
         self.classify = nn.Linear(4 * self.in_planes, self.num_classes, bias=False)
+        self.classify_cnn = nn.Linear(self.in_planes, self.num_classes, bias=False)
 
         # body part id
         self.parts_id = [
@@ -71,6 +72,7 @@ class JointFromer(nn.Module):
         # extract feature
         feat_map = self.feature_map_extract(x)
 
+        feat_cnn = self.avg_pool(feat_map).squeeze()
         feat_parts = torch.einsum('bchw,bphw->bpchw', feat_map, heatmap)
         # patch embedding: Means processing for non-zero elements
         feat_parts = feat_parts.reshape([B * P] + list(feat_parts.shape[2:]))
@@ -108,7 +110,8 @@ class JointFromer(nn.Module):
         # output
         if self.training:
             score = self.classify(feats)
-            return score, feats
+            score_cnn = self.classify_cnn(feat_cnn)
+            return [score,score_cnn], feats
         else:
             return feats
 

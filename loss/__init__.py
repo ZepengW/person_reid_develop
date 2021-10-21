@@ -1,6 +1,6 @@
 import logging
 from .triplet_loss import TripletLoss, WeightedRegularizedTriplet, CrossEntropyLabelSmooth
-
+import torch
 __factory_loss = {
     'xent_label_smooth': CrossEntropyLabelSmooth,
     'triplet': TripletLoss,
@@ -34,7 +34,13 @@ def make_loss(loss_cfg: dict, **params):
         loss_value_l = []
         loss_name = []
         for i, loss in enumerate(loss_func_l):
-            loss_value = loss(inputs=inputs,feats=feats,targets=targets)
+            if isinstance(inputs,list):
+                loss_value = torch.tensor(0.0).to(targets.device)
+                for input in inputs:
+                    loss_value += loss(inputs=input,feats=feats,targets=targets)
+                loss_value = loss_value / len(inputs)
+            else:
+                loss_value = loss(inputs=inputs, feats=feats, targets=targets)
             if isinstance(loss_value,tuple):    # triplet loss return 3-tuple
                 loss_value = loss_value[0]
             total_loss += loss_weight_l[i] * loss_value
