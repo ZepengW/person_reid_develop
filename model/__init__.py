@@ -100,7 +100,7 @@ class ModelManager:
         bool_warning = False
         # learning rate adjust
         self.scheduler.step(epoch)
-        logging.info(f"Epoch [{epoch}] Training... Base Lr:{self.scheduler._get_lr(epoch)[0]}")
+        logging.info(f"[Epoch:{epoch:0>4d}] Training... Base Lr:{self.scheduler._get_lr(epoch)[0]:.2e}".center(50,'='))
         for idx, (imgs, ids, cam_id, _, heatmaps) in enumerate(dataloader):
             self.optimizer.zero_grad()
 
@@ -145,9 +145,10 @@ class ModelManager:
             if is_vis:
                 self.writer.add_embedding(features_vis, metadata=pids_l, global_step=epoch, tag='train')
         self.save_model(self.net, self.model_name, epoch)
+        logging.info(f"[Epoch:{epoch:0>4d}] Train Finish".center(50,'='))
 
     def test(self, queryLoader: DataLoader, galleryLoader: DataLoader, epoch = 0, is_vis = False):
-        logging.info("begin to test")
+        logging.info("[begin to test]".center(50,'='))
         self.net.eval()
         gf = []
         gPids = np.array([], dtype=int)
@@ -210,6 +211,7 @@ class ModelManager:
                 features_test = torch.cat([gf, qf])
                 labels = gPids.tolist() + qPids.tolist()
                 self.writer.add_embedding(features_test, metadata=labels, global_step=epoch, tag='test')
+        logging.info("[test finish]".center(50,'='))
 
 def PCA_svd(X, k, center=True):
     n = X.size()[0]
