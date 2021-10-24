@@ -1,0 +1,51 @@
+mode: train
+task-name: TransReID-Duke
+
+
+model-manager:
+  network_name: transreid # the network model
+  save_name: TransReID-Duke
+  network-params: # the params used to create model
+    PRETRAIN_CHOICE: 'imagenet'
+    PRETRAIN_PATH: './pretrained/jx_vit_base_p16_224-80ecf9dd.pth'
+    METRIC_LOSS_TYPE: 'triplet'
+    IF_LABELSMOOTH: 'off'
+    IF_WITH_CENTER: 'no'
+    NAME: 'transformer'
+    NO_MARGIN: True
+    DEVICE_ID: ('4')
+    TRANSFORMER_TYPE: 'vit_base_patch16_224_TransReID'
+    STRIDE_SIZE: [ 12, 12 ]
+    SIE_CAMERA: True
+    SIE_COE: 3.0
+    JPM: True
+    RE_ARRANGE: True
+    CAMERA_NUM: 12
+    SIZE_INPUT: [256, 128]
+  network_inputs: ['img','camera_id'] # the data dict keys which the network input
+  epoch: 500
+  solver:
+    optimizer: Adam
+    base_lr: 0.001
+    weight_decay: 0.0003
+    warmup_epochs: 10
+    max_epoch: 500
+  loss:
+    wrt:
+      weight: 0.01
+    xent_label_smooth:
+      weight: 0.99
+
+
+dataset:
+  dataset_name: duke
+  dataset_path: ../dataset/DukeMTMC-reID
+  image_size:
+    - 256
+    - 128
+  num_workers: 8
+  batch_size_train: 16
+  batch_size_test: 16
+  type: image
+
+

@@ -1,10 +1,12 @@
 import logging
 from .net.resnet import resnet50
 from .net.joint_transformer import JointFromer
+from .net.transreid import TransReID
 
 __factory_model = {
     'resnet50': resnet50,
-    'jointformer': JointFromer
+    'jointformer': JointFromer,
+    'transreid': TransReID
 }
 
 
