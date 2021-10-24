@@ -81,8 +81,7 @@ class DatasetImage(Dataset):
         heatmap = np.load(hm_path)
         heatmap = torch.from_numpy(heatmap)
 
-        # transform
-        return img, p_id, cam_id, clothes_id, heatmap
+        return {'img':img, 'pid':p_id, 'camera_id':cam_id, 'clothes_id':clothes_id, 'heatmap':heatmap}
 
 
 class DatasetVideo(Dataset):

@@ -65,12 +65,12 @@ class JointFromer(nn.Module):
         ]
         # add 1 for each part id, because the first vit patch is token
 
-    def forward(self, x, heatmap):
-        B = x.shape[0]
+    def forward(self, img, heatmap):
+        B = img.shape[0]
         P = heatmap.shape[1]
         heatmap = torch.clamp(heatmap, 0.01, 0.99)
         # extract feature
-        feat_map = self.feature_map_extract(x)
+        feat_map = self.feature_map_extract(img)
 
         feat_cnn = self.avg_pool(feat_map).squeeze()
         feat_parts = torch.einsum('bchw,bphw->bpchw', feat_map, heatmap)

@@ -25,6 +25,8 @@ class ModelManager:
         network_params = cfg.get('network-params',dict())
         network_params['num_classes'] = class_num
         self.net = make_model(cfg.get('network_name'),network_params)
+        # data keys which the network input
+        self.input_keys = cfg.get('network_inputs', ['img','pid'])
 
         # Multi-GPU Set
         if torch.cuda.device_count() > 1:
@@ -101,14 +103,19 @@ class ModelManager:
         # learning rate adjust
         self.scheduler.step(epoch)
         logging.info(f"[Epoch:{epoch:0>4d}] Training... Base Lr:{self.scheduler._get_lr(epoch)[0]:.2e}".center(50,'='))
-        for idx, (imgs, ids, cam_id, _, heatmaps) in enumerate(dataloader):
+        for idx, data_dict in enumerate(dataloader):
             self.optimizer.zero_grad()
-
-            # extract body part features
-            imgs = imgs.to(self.device)
-            heatmaps = heatmaps.to(self.device)
-            score, feat = self.net(imgs, heatmaps)
-            ids = ids.to(self.device)
+            # extract ids
+            ids = data_dict.get('pid').to(self.device)
+            # convert data inputted the network to self.device
+            input_data = dict()
+            for l in self.input_keys:
+                if not l in data_dict.keys():
+                    logging.error('data_dict does not contain the data(key) which needed to input the network')
+                    return
+                else:
+                    input_data[l] = data_dict[l].to(self.device)
+            score, feat = self.net(**input_data)
             total_loss, loss_value, loss_name = self.lossesFunction(score,feat,ids)
 
             total_loss_l.append(float(total_loss.cpu()))
@@ -155,11 +162,21 @@ class ModelManager:
         gCids = np.array([], dtype=int)
         gClothesids = np.array([], dtype=int)
         logging.info("compute features of gallery samples")
-        for idx, (imgs, pids, cids, clothes_ids, heatmaps) in enumerate(galleryLoader):
-            imgs = imgs.to(self.device)
-            heatmaps = heatmaps.to(self.device)
+        for idx, data_dict in enumerate(galleryLoader):
+            # extract ids
+            pids = data_dict.get('pid')
+            cids = data_dict.get('camera_id')
+            clothes_ids = data_dict.get('clothes_id')
+            # convert data inputted the network to self.device
+            input_data = dict()
+            for l in self.input_keys:
+                if not l in data_dict.keys():
+                    logging.error('data_dict does not contain the data(key) which needed to input the network')
+                    return
+                else:
+                    input_data[l] = data_dict[l].to(self.device)
             with torch.no_grad():
-                f_whole = self.net(imgs, heatmaps)
+                f_whole = self.net(**input_data)
                 gf.append(f_whole)
                 gPids = np.concatenate((gPids, pids.numpy()), axis=0)
                 gCids = np.concatenate((gCids, cids.numpy()), axis=0)
@@ -171,11 +188,21 @@ class ModelManager:
         qPids = np.array([], dtype=int)
         qCids = np.array([], dtype=int)
         qClothesids = np.array([], dtype=int)
-        for idx, (imgs, pids, cids, clothes_ids, heatmaps) in enumerate(queryLoader):
-            imgs = imgs.to(self.device)
-            heatmaps = heatmaps.to(self.device)
+        for idx, data_dict in enumerate(queryLoader):
+            # extract ids
+            pids = data_dict.get('pid')
+            cids = data_dict.get('camera_id')
+            clothes_ids = data_dict.get('clothes_id')
+            # convert data inputted the network to self.device
+            input_data = dict()
+            for l in self.input_keys:
+                if not l in data_dict.keys():
+                    logging.error('data_dict does not contain the data(key) which needed to input the network')
+                    return
+                else:
+                    input_data[l] = data_dict[l].to(self.device)
             with torch.no_grad():
-                f_whole = self.net(imgs, heatmaps)
+                f_whole = self.net(**data_dict)
                 qf.append(f_whole)
                 qPids = np.concatenate((qPids, pids.numpy()), axis=0)
                 qCids = np.concatenate((qCids, cids.numpy()), axis=0)
