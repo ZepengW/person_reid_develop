@@ -66,14 +66,14 @@ def main(config, writer_tensorboardX):
             batch_size=dataset_config.get('batch_size_test', 16),
             num_workers=dataset_config.get('num_workers', 8),
             drop_last=False,
-            shuffle=True
+            shuffle=False
         )
         loader_query_source = DataLoader(
             get_dataset('query', transform=t),
             batch_size=dataset_config.get('batch_size_test', 16),
             num_workers=dataset_config.get('num_workers', 8),
             drop_last=False,
-            shuffle=True
+            shuffle=False
         )
         logging.info("load test data finish")
         logging.info("prepare to train from epoch[{0}] to epoch[{1}]".format(model.trained_epoches,
@@ -91,14 +91,14 @@ def main(config, writer_tensorboardX):
             batch_size=dataset_config.get('batch_size_test', 16),
             num_workers=dataset_config.get('num_workers', 8),
             drop_last=False,
-            shuffle=True
+            shuffle=False
         )
         loader_query_source = DataLoader(
             get_dataset('query', transform=t),
             batch_size=dataset_config.get('batch_size_test', 16),
             num_workers=dataset_config.get('num_workers', 8),
             drop_last=False,
-            shuffle=True
+            shuffle=False
         )
         logging.info("load test data finish")
         model.test(loader_query_source, loader_gallery_source, is_vis=vis_bool)

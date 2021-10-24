@@ -14,6 +14,7 @@ model-manager:
     warmup_epochs: 10
     max_epoch: 500
   loss:
+    use_loss: ['wrt','xent_label_smooth']    # loss used for backward
     wrt:
       weight: 0.01
     xent_label_smooth:
@@ -27,8 +28,8 @@ dataset:
     - 256
     - 128
   num_workers: 8
-  batch_size_train: 16
-  batch_size_test: 16
+  batch_size_train: 64
+  batch_size_test: 64
   type: image
 
 

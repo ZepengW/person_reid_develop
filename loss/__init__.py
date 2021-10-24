@@ -15,6 +15,7 @@ def make_loss(loss_cfg: dict, **params):
     loss_weight_l = []
     loss_name_l = []
     loss_input = []
+    weight_per_loss_l = []
     for key in loss_cfg.get('use_loss',['cross_entropy']):
         if not key in __factory_loss.keys():
             logging.warning(f'Can Not Find Loss Function : {key}')
@@ -30,6 +31,7 @@ def make_loss(loss_cfg: dict, **params):
         loss_weight_l.append(loss_params.get('weight',1.0))
         loss_name_l.append(key)
         loss_input.append(loss_params.get('except_input'))
+        weight_per_loss_l.append(loss_params.get('list_weight', []))
 
     def loss_func(inputs, feats, targets):
         '''
@@ -46,16 +48,16 @@ def make_loss(loss_cfg: dict, **params):
             if loss_input[i] == 'score':
                 if isinstance(inputs, list):
                     loss_value = torch.tensor(0.0).to(targets.device)
-                    for input in inputs:
-                        loss_value += loss(input, targets)
+                    for j, input in enumerate(inputs):
+                        loss_value += loss(input, targets) * weight_per_loss_l[i][j]
                     loss_value = loss_value / len(inputs)
                 else:
                     loss_value = loss(inputs=inputs, targets=targets)
             elif loss_input[i] == 'feature':
                 if isinstance(feats, list):
                     loss_value = torch.tensor(0.0).to(targets.device)
-                    for feat in feats:
-                        loss_value += loss(feat, targets)
+                    for j, feat in enumerate(feats):
+                        loss_value += loss(feat, targets) * weight_per_loss_l[i][j]
                     loss_value = loss_value / len(inputs)
                 else:
                     loss_value = loss(feats=feats, targets=targets)

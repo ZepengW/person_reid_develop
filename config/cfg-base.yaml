@@ -30,3 +30,6 @@ model-manager:
     triplet:
       weight: 1.0
       except_input: 'feature'
+    cross_entropy:
+      weight: 1.0
+      except_input: 'score'       # except input tensor type

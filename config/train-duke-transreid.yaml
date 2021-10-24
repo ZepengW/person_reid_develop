@@ -13,7 +13,6 @@ model-manager:
     IF_WITH_CENTER: 'no'
     NAME: 'transformer'
     NO_MARGIN: True
-    DEVICE_ID: ('4')
     TRANSFORMER_TYPE: 'vit_base_patch16_224_TransReID'
     STRIDE_SIZE: [ 12, 12 ]
     SIE_CAMERA: True
@@ -23,21 +22,22 @@ model-manager:
     CAMERA_NUM: 12
     SIZE_INPUT: [256, 128]
   network_inputs: ['img','camera_id'] # the data dict keys which the network input
-  epoch: 500
+  epoch: 120
   solver:
     optimizer: Adam
-    base_lr: 0.001
-    weight_decay: 0.0003
+    base_lr: 0.008
+    weight_decay: 0.0005
     warmup_epochs: 10
-    max_epoch: 500
+    max_epoch: 120
   loss:
-    use_loss: ['triplet','cross_entropy']
+    use_loss: ['cross_entropy','triplet']
     triplet:
       weight: 1.0
       list_weight: [0.5,0.125,0.125,0.125,0.125]  # for output feature is list
     cross_entropy:
       weight: 1.0
       list_weight: [0.5,0.125,0.125,0.125,0.125] # for output score is list
+      except_input: 'score'
 
 
 dataset:
@@ -47,8 +47,8 @@ dataset:
     - 256
     - 128
   num_workers: 8
-  batch_size_train: 16
-  batch_size_test: 16
+  batch_size_train: 64
+  batch_size_test: 256
   type: image
 
 

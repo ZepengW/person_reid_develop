@@ -26,7 +26,8 @@ def euclidean_dist(x, y):
     xx = torch.pow(x, 2).sum(1, keepdim=True).expand(m, n)
     yy = torch.pow(y, 2).sum(1, keepdim=True).expand(n, m).t()
     dist = xx + yy
-    dist.addmm_(x, y.t(), beta=1, alpha=-2)
+    dist = dist - 2 * torch.matmul(x, y.t())
+    # dist.addmm_(1, -2, x, y.t())
     dist = dist.clamp(min=1e-12).sqrt()  # for numerical stability
     return dist
 
@@ -91,8 +92,9 @@ class TripletLoss(object):
     Related Triplet Loss theory can be found in paper 'In Defense of the Triplet
     Loss for Person Re-Identification'."""
 
-    def __init__(self, margin=None, **kwargs):
+    def __init__(self, margin=None, hard_factor=0.0, **kwargs):
         self.margin = margin
+        self.hard_factor = hard_factor
         if margin is not None:
             self.ranking_loss = nn.MarginRankingLoss(margin=margin)
         else:
@@ -102,8 +104,11 @@ class TripletLoss(object):
         if normalize_feature:
             feats = normalize(feats, axis=-1)
         dist_mat = euclidean_dist(feats, feats)
-        dist_ap, dist_an = hard_example_mining(
-            dist_mat, targets)
+        dist_ap, dist_an = hard_example_mining(dist_mat, targets)
+
+        dist_ap *= (1.0 + self.hard_factor)
+        dist_an *= (1.0 - self.hard_factor)
+
         y = dist_an.new().resize_as_(dist_an).fill_(1)
         if self.margin is not None:
             loss = self.ranking_loss(dist_an, dist_ap, y)
