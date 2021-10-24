@@ -9,6 +9,7 @@ from model import ModelManager
 from torch.utils.data import DataLoader
 import yaml
 from tensorboardX import SummaryWriter
+from dataset.sampler import RandomIdentitySampler
 
 
 # set cuda visible devices, and return the first gpu device
@@ -52,12 +53,17 @@ def main(config, writer_tensorboardX):
     get_dataset = getattr(dataset_manager, 'get_dataset_' + dataset_type)
     if 'train' == mode:
         logging.info("loading train data")
+        batch_size_train = dataset_config.get('batch_size_train', 16)
+        num_pid_per_batch = dataset_config.get('num_pid_per_batch', 4)  # number of person per batch
+        dataset_train = get_dataset('train', transform=t)
+        data_sampler = RandomIdentitySampler(dataset_manager.get_dataset_list('train'),
+                                                 batch_size_train,
+                                                 num_pid_per_batch)
         loader_train_source = DataLoader(
-            get_dataset('train', transform=t),
-            batch_size=dataset_config.get('batch_size_train', 16),
+            dataset_train,
+            batch_size=batch_size_train,
             num_workers=dataset_config.get('num_workers', 8),
-            drop_last=True,
-            shuffle=True
+            sampler=data_sampler
         )
         logging.info("load train data finish")
         logging.info("loading test data")
@@ -77,7 +83,7 @@ def main(config, writer_tensorboardX):
         )
         logging.info("load test data finish")
         logging.info("prepare to train from epoch[{0}] to epoch[{1}]".format(model.trained_epoches,
-                                                                             model_config.get('epoch', 64) - 1))
+                                                                             model_config.get('epoch', 64)))
         for i in range(model.trained_epoches+1, model_config.get('epoch', 64)+1):
             is_vis = (i % vis_interval == 0 or i == model_config.get('epoch', 64) - 1) #each vis_interval or last epoch
             is_vis = is_vis and vis_bool
