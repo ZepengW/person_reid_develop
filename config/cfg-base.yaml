@@ -19,7 +19,14 @@ model-manager:
     warmup_epochs: 5
     max_epoch: 120
   loss:
-    wrt:
-      weight: 0.1
-    xent_label_smooth:
-      weight: 0.9
+    use_loss: ['wrt','xent_label_smooth']    # loss used for backward
+    wrt:    # loss wrt params
+      weight: 1.0     # loss weight in total loss
+      except_input: 'feature'     # except input tensor type
+    xent_label_smooth:     # loss xent_label_smooth params
+      weight: 1.0
+      params_initial: ['num_classes']     # params used for initialize the loss object
+      except_input: 'score'       # except input tensor type
+    triplet:
+      weight: 1.0
+      except_input: 'feature'
