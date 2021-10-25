@@ -18,7 +18,7 @@ from loss import make_loss
 class ModelManager:
     def __init__(self, cfg: dict, device, class_num=1000, writer: SummaryWriter = None):
         self.device = device
-        self.model_name = cfg.get('name', 'default-network')
+        self.model_name = cfg.get('save_name', 'model-no-name')
 
         # model load
         # add your own network here
@@ -202,7 +202,7 @@ class ModelManager:
                 else:
                     input_data[l] = data_dict[l].to(self.device)
             with torch.no_grad():
-                f_whole = self.net(**data_dict)
+                f_whole = self.net(**input_data)
                 qf.append(f_whole)
                 qPids = np.concatenate((qPids, pids.numpy()), axis=0)
                 qCids = np.concatenate((qCids, cids.numpy()), axis=0)
