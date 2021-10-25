@@ -1,4 +1,4 @@
-mode: train
+mode: test
 task-name: TransReID-Duke
 gpu: [0]
 
@@ -6,6 +6,7 @@ gpu: [0]
 model-manager:
   network_name: transreid # the network model
   save_name: TransReID-Duke
+  load_path: ./output/TransReID-Duke_120.pkl
   network-params: # the params used to create model
     PRETRAIN_CHOICE: 'imagenet'
     PRETRAIN_PATH: './pretrained/jx_vit_base_p16_224-80ecf9dd.pth'
@@ -41,6 +42,7 @@ model-manager:
       weight: 1.0
       list_weight: [0.5,0.125,0.125,0.125,0.125] # for output score is list
       except_input: 'score'
+  re_ranking: True
 
 
 dataset:
