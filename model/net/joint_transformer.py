@@ -57,6 +57,10 @@ class JointFromer(nn.Module):
         # classify layer
         self.classify = nn.Linear(4 * self.in_planes, self.num_classes, bias=False)
         self.classify_cnn = nn.Linear(self.in_planes, self.num_classes, bias=False)
+        self.classify_whole = nn.Linear(self.in_planes, self.num_classes, bias=False)
+        self.classify_head = nn.Linear(self.in_planes, self.num_classes, bias=False)
+        self.classify_upper = nn.Linear(self.in_planes, self.num_classes, bias=False)
+        self.classify_lower = nn.Linear(self.in_planes, self.num_classes, bias=False)
 
         # body part id
         self.parts_id = [
@@ -107,14 +111,17 @@ class JointFromer(nn.Module):
         feats_local_upper = self.bottleneck_2(feats_local_upper)
         feats_local_lower = self.bottleneck_3(feats_local_lower)
         # feature fuse
-        feats = torch.cat([feats_whole, feats_local_head / 3, feats_local_upper / 3, feats_local_lower / 3], dim=1)
+        #feats = torch.cat([feats_whole, feats_local_head / 3, feats_local_upper / 3, feats_local_lower / 3], dim=1)
         # output
         if self.training:
-            score = self.classify(feats)
             score_cnn = self.classify_cnn(feat_cnn)
-            return [score,score_cnn], feats
+            score_whole = self.classify_whole(feats_whole)
+            score_head = self.classify_head(feats_local_head)
+            score_upper = self.classify_upper(feats_local_upper)
+            score_lower = self.classify_lower(feats_local_lower)
+            return [score_whole,score_head,score_upper,score_lower,score_cnn], [feats_whole,feats_local_head,feats_local_upper,feats_local_lower,feat_cnn]
         else:
-            return feats
+            return torch.cat([feats_whole, feats_local_head / 3, feats_local_upper / 3, feats_local_lower / 3], dim=1)
 
 class JointFromerV0_4(nn.Module):
     '''
