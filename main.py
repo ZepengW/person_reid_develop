@@ -8,9 +8,21 @@ from dataset import DatasetManager, DatasetVideo
 from model import ModelManager
 from torch.utils.data import DataLoader
 import yaml
+import numpy as np
+import random
 from tensorboardX import SummaryWriter
 from dataset.sampler import RandomIdentitySampler
 
+
+
+def set_seed(seed):
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    np.random.seed(seed)
+    random.seed(seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = True
 
 # set cuda visible devices, and return the first gpu device
 def set_gpus_env(gpu_ids):
@@ -31,6 +43,7 @@ def set_gpus_env(gpu_ids):
 
 
 def main(config, writer_tensorboardX):
+    set_seed(config.get('seed',1234))
     device = set_gpus_env(config.get('gpu', [0]))
     vis_bool = config.get('vis', False)     # draw feature distribution
     vis_interval = config.get('vis_interval', 20)    # interval of drawing feature distribution
