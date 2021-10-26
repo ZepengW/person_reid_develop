@@ -127,7 +127,8 @@ class ModelManager:
                 loss_str_batch = f' '.join([f'[{name}:{loss_avg_batch[i]:.4f}]' for i, name in enumerate(loss_name)])
                 logging.info(
                     f'[E{epoch:0>4d}|Batch:{idx+1:0>4d}/{batch_num:0>4d}] '
-                    f'LOSS=[total:{np.mean(np.array(total_loss_l[idx + 1 - 50:idx + 1])):.4f}] | ' + loss_str_batch)
+                    f'LOSS=[total:{np.mean(np.array(total_loss_l[idx + 1 - 50:idx + 1])):.4f}]')
+                logging.info(f'[E{epoch:0>4d}|Batch:{idx+1:0>4d}/{batch_num:0>4d}] LOSS Detail:' + loss_str_batch)
 
             # update model
             total_loss.backward()
