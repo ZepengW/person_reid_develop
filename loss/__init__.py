@@ -52,7 +52,7 @@ def make_loss(loss_cfg: dict, **params):
                         loss_value += loss(input, targets) * weight_per_loss_l[i][j]
                     loss_value = loss_value / len(inputs)
                 else:
-                    loss_value = loss(inputs=inputs, targets=targets)
+                    loss_value = loss(inputs, targets)
             elif loss_input[i] == 'feature':
                 if isinstance(feats, list):
                     loss_value = torch.tensor(0.0).to(targets.device)
@@ -60,7 +60,7 @@ def make_loss(loss_cfg: dict, **params):
                         loss_value += loss(feat, targets) * weight_per_loss_l[i][j]
                     loss_value = loss_value / len(inputs)
                 else:
-                    loss_value = loss(feats=feats, targets=targets)
+                    loss_value = loss(feats, targets)
             total_loss += loss_weight_l[i] * loss_value
             loss_value_l.append(float(loss_value.cpu()))
             loss_name.append(loss_name_l[i])

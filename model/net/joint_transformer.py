@@ -12,7 +12,7 @@ class JointFromer(nn.Module):
     Joint Transformer
     '''
 
-    def __init__(self, num_classes, parts=18, in_planes=768, **kwargs):
+    def __init__(self, num_classes, vit_pretrained_path=None, parts=18, in_planes=768, **kwargs):
         super(JointFromer, self).__init__()
         self.parts = parts
         self.num_classes = num_classes
@@ -25,7 +25,8 @@ class JointFromer(nn.Module):
         # vit backbone network
         self.transformer = TransReID(num_classes=num_classes, num_patches=parts, embed_dim=self.in_planes, depth=12,
                                      num_heads=12, mlp_ratio=4, qkv_bias=True, drop_path_rate=0.1)
-        self.transformer.load_param('./pretrained/jx_vit_base_p16_224-80ecf9dd.pth')
+        if not vit_pretrained_path is None:
+            self.transformer.load_param(vit_pretrained_path)
         block = self.transformer.blocks[-1]
         layer_norm = self.transformer.norm
         self.b1 = nn.Sequential(
@@ -112,6 +113,77 @@ class JointFromer(nn.Module):
             score = self.classify(feats)
             score_cnn = self.classify_cnn(feat_cnn)
             return [score,score_cnn], feats
+        else:
+            return feats
+
+class JointFromerV0_4(nn.Module):
+    '''
+    Joint Transformer v0.4
+    '''
+
+    def __init__(self, num_classes,vit_pretrained_path=None, parts = 18, in_planes = 768, **kwargs):
+        super(JointFromerV0_4, self).__init__()
+        self.parts = parts
+        self.num_classes = num_classes
+        self.in_planes = in_planes
+        # extract feature
+        self.feature_map_extract = PCB_Feature(block=Bottleneck, layers=[3,4,6,3])
+        # patch embeding
+        self.downsample_global = nn.Conv2d(2048, 1024, kernel_size=1)
+        self.downsample = nn.Conv2d(2048, in_planes, kernel_size=1)
+        #self.proj = torch.nn.AdaptiveAvgPool2d((1,1))
+        self.proj = torch.nn.AdaptiveMaxPool2d((1,1))
+        # vit backbone network
+        self.transformer = TransReID(num_classes=num_classes, num_patches=parts,embed_dim=self.in_planes,depth=12, num_heads=12, mlp_ratio=4, qkv_bias=True)
+        if not vit_pretrained_path is None:
+            self.transformer.load_param(vit_pretrained_path)
+        # bottleneck
+        self.bottleneck = nn.BatchNorm1d(1024)
+        self.bottleneck.bias.requires_grad_(False)
+        self.bottleneck.apply(weights_init_kaiming)
+        self.bottleneck_whole = nn.BatchNorm1d(self.in_planes)
+        self.bottleneck_whole.bias.requires_grad_(False)
+        self.bottleneck_whole.apply(weights_init_kaiming)
+        self.bottleneck_part = nn.BatchNorm1d(self.in_planes)
+        self.bottleneck_part.bias.requires_grad_(False)
+        self.bottleneck_part.apply(weights_init_kaiming)
+        # feature fusion
+        self.feat_fuse = torch.nn.AdaptiveMaxPool1d(1)
+        # classify layer
+        self.classify = nn.Linear(2 * self.in_planes + 1024, self.num_classes, bias=False)
+
+    def forward(self, img, heatmap):
+        B = img.shape[0]
+        P = heatmap.shape[1]
+        #extract feature
+        feat_map = self.feature_map_extract(img)
+        feats_global = self.proj(feat_map) # (b, 2048, 1, 1)
+        feats_global = self.downsample_global(feats_global)
+        feats_global = feats_global.squeeze()
+
+        feat_parts = torch.einsum('bchw,bphw->bpchw',feat_map,heatmap)
+        # patch embedding: Means processing for non-zero elements
+        feat_parts = feat_parts.reshape([B*P]+list(feat_parts.shape[2:]))
+        feat_parts = self.proj(feat_parts)
+        feat_parts = feat_parts.float()
+        feat_parts = self.downsample(feat_parts)
+        feat_parts = feat_parts.reshape(B,P,-1)
+        # transformer
+        feats = self.transformer(feat_parts)
+        # bottleneck
+        feats_global = self.bottleneck(feats_global)
+        feats_whole_vit = feats[:,0]
+        feats_whole_vit = self.bottleneck_whole(feats_whole_vit)
+        feats_part_vit = feats[:,1:]
+        feats_part_vit = feats_part_vit.permute([0,2,1])
+        feats_part_vit = self.feat_fuse(feats_part_vit)
+        feats_part_vit = feats_part_vit.squeeze()
+        feats_part_vit = self.bottleneck_part(feats_part_vit)
+        feats = torch.cat([feats_global, feats_whole_vit, feats_part_vit], dim=1)
+        # output
+        if self.training:
+            score = self.classify(feats)
+            return score,feats
         else:
             return feats
 

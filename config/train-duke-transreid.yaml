@@ -33,7 +33,6 @@ model-manager:
     weight_decay_bias: 0.0001
     warmup_epochs: 5
     max_epoch: 120
-    bias_lr_factor: 2
   loss:
     use_loss: ['cross_entropy','triplet']
     triplet:
