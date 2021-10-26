@@ -33,3 +33,15 @@ model-manager:
     cross_entropy:
       weight: 1.0
       except_input: 'score'       # except input tensor type
+
+dataset:
+  dataset_name: duke
+  dataset_path: ../dataset/DukeMTMC-reID
+  image_size:
+    - 256
+    - 128
+  num_workers: 8
+  batch_size_train: 128
+  batch_size_test: 128
+  num_pid_per_batch: 4
+  type: image

@@ -16,7 +16,7 @@ def make_optimizer(cfg_solver:dict, model, center_criterion= None):
         lr = cfg_solver.get('base_lr', 0.0003)
         weight_decay = cfg_solver.get('weight_decay', 0.0005)
         if "bias" in key:
-            lr = lr * cfg_solver.get('bias_lr_factor', 0.0003)
+            lr = lr * cfg_solver.get('bias_lr_factor', 1)
             weight_decay = cfg_solver.get('weight_decay_bias', 0.0005)
         if cfg_solver.get('large_fc_lr', False):
             # Whether using larger learning rate for fc layer

@@ -27,9 +27,11 @@ model-manager:
   solver:
     optimizer: SGD
     base_lr: 0.008
+    bias_lr_factor: 2
+    cosine_mergin: 0.5
     weight_decay: 0.0001
     weight_decay_bias: 0.0001
-    warmup_epochs: 10
+    warmup_epochs: 5
     max_epoch: 120
     bias_lr_factor: 2
   loss:
@@ -41,6 +43,7 @@ model-manager:
       weight: 1.0
       list_weight: [0.5,0.125,0.125,0.125,0.125] # for output score is list
       except_input: 'score'
+  re_ranking: False
 
 
 dataset:
