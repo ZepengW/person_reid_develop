@@ -11,8 +11,8 @@ model-manager:
   network_inputs: ['img','heatmap'] # the data dict keys which the network input
   epoch: 120
   solver:
-    optimizer: SGD
-    base_lr: 0.008
+    optimizer: Adam
+    base_lr: 0.0001
     bias_lr_factor: 2
     cosine_mergin: 0.5
     weight_decay: 0.0001
@@ -35,7 +35,7 @@ dataset:
     - 384
     - 128
   num_workers: 8
-  batch_size_train: 128
+  batch_size_train: 64
   batch_size_test: 128
   type: image
 
