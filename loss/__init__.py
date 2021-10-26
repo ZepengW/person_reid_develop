@@ -46,24 +46,33 @@ def make_loss(loss_cfg: dict, **params):
         loss_name = []
         for i, loss in enumerate(loss_func_l):
             if loss_input[i] == 'score':
-                if isinstance(inputs, list):
+                # compute loss related with classify, such as cross entropy loss
+                if isinstance(inputs, list):    # for list input
                     loss_value = torch.tensor(0.0).to(targets.device)
                     for j, input in enumerate(inputs):
-                        loss_value += loss(input, targets) * weight_per_loss_l[i][j]
-                    loss_value = loss_value / len(inputs)
+                        loss_value_per = loss(input, targets)
+                        loss_value += loss_value_per * weight_per_loss_l[i][j]
+                        loss_value_l.append(float(loss_value_per.cpu()))
+                        loss_name.append(loss_name_l[i]+f'_{j}')
                 else:
                     loss_value = loss(inputs, targets)
+                    loss_value_l.append(float(loss_value.cpu()))
+                    loss_name.append(loss_name_l[i])
             elif loss_input[i] == 'feature':
-                if isinstance(feats, list):
+                # compute loss related with feature distance, such as triplet loss
+                if isinstance(feats, list):     # for list input
                     loss_value = torch.tensor(0.0).to(targets.device)
                     for j, feat in enumerate(feats):
-                        loss_value += loss(feat, targets) * weight_per_loss_l[i][j]
-                    loss_value = loss_value / len(inputs)
+                        loss_value_per = loss(feat, targets)
+                        loss_value += loss_value_per * weight_per_loss_l[i][j]
+                        loss_value_l.append(float(loss_value_per.cpu()))
+                        loss_name.append(loss_name_l[i]+f'_{j}')
                 else:
                     loss_value = loss(feats, targets)
+                    loss_value_l.append(float(loss_value.cpu()))
+                    loss_name.append(loss_name_l[i])
+
             total_loss += loss_weight_l[i] * loss_value
-            loss_value_l.append(float(loss_value.cpu()))
-            loss_name.append(loss_name_l[i])
         return total_loss, loss_value_l, loss_name
 
     return loss_func
