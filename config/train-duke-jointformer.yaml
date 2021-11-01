@@ -9,7 +9,7 @@ model-manager:
   network-params: # the params used to create model
     vit_pretrained_path: ./pretrained/jx_vit_base_p16_224-80ecf9dd.pth
   network_inputs: ['img','heatmap'] # the data dict keys which the network input
-  epoch: 120
+  epoch: 500
   solver:
     optimizer: SGD
     base_lr: 0.008
@@ -18,15 +18,15 @@ model-manager:
     weight_decay: 0.0001
     weight_decay_bias: 0.0001
     warmup_epochs: 5
-    max_epoch: 120
+    max_epoch: 500
   loss:
     use_loss: ['cross_entropy','triplet']
     triplet:
-      weight: 0.01
-      list_weight: [0.3,0.1,0.1,0.1,0.3]
+      weight: 0.1
+      list_weight: [1,0.5,0.5,0.5,1]
     cross_entropy:
-      weight: 0.99
-      list_weight: [0.3,0.1,0.1,0.1,0.3]
+      weight: 0.9
+      list_weight: [1,0.5,0.5,0.5,1]
 
 
 dataset:

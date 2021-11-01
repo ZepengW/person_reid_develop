@@ -157,7 +157,8 @@ class JointFromerV0_4(nn.Module):
         # feature fusion
         self.feat_fuse = torch.nn.AdaptiveMaxPool1d(1)
         # classify layer
-        self.classify = nn.Linear(2 * self.in_planes + 1024, self.num_classes, bias=False)
+        self.classify_cnn = nn.Linear(1024, self.num_classes, bias=False)
+        self.classify_vit = nn.Linear(self.in_planes, self.num_classes, bias=False)
 
     def forward(self, img, heatmap):
         B = img.shape[0]
@@ -181,16 +182,12 @@ class JointFromerV0_4(nn.Module):
         feats_global = self.bottleneck(feats_global)
         feats_whole_vit = feats[:,0]
         feats_whole_vit = self.bottleneck_whole(feats_whole_vit)
-        feats_part_vit = feats[:,1:]
-        feats_part_vit = feats_part_vit.permute([0,2,1])
-        feats_part_vit = self.feat_fuse(feats_part_vit)
-        feats_part_vit = feats_part_vit.squeeze()
-        feats_part_vit = self.bottleneck_part(feats_part_vit)
-        feats = torch.cat([feats_global, feats_whole_vit, feats_part_vit], dim=1)
+        feats = torch.cat([feats_global, feats_whole_vit], dim=1)
         # output
         if self.training:
-            score = self.classify(feats)
-            return score,feats
+            score_cnn = self.classify_cnn(feats_global)
+            score_vit = self.classify_vit(feats_whole_vit)
+            return [score_cnn,score_vit],[feats_global, feats_whole_vit]
         else:
             return feats
 
