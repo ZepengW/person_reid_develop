@@ -123,18 +123,18 @@ class JointFromer(nn.Module):
         else:
             return torch.cat([feats_whole, feats_local_head / 3, feats_local_upper / 3, feats_local_lower / 3], dim=1)
 
-class JointFromerV0_4(nn.Module):
+class JointFromerPCB(nn.Module):
     '''
-    Joint Transformer v0.4
+    Joint Transformer using PCB to generate feature map
     '''
 
-    def __init__(self, num_classes,vit_pretrained_path=None, parts = 18, in_planes = 768, **kwargs):
-        super(JointFromerV0_4, self).__init__()
+    def __init__(self, num_classes,vit_pretrained_path=None, parts = 18, in_planes = 768, pretrained=True, **kwargs):
+        super(JointFromerPCB, self).__init__()
         self.parts = parts
         self.num_classes = num_classes
         self.in_planes = in_planes
         # extract feature
-        self.feature_map_extract = PCB_Feature(block=Bottleneck, layers=[3,4,6,3])
+        self.feature_map_extract = PCB_Feature(block=Bottleneck, layers=[3,4,6,3], pretrained=pretrained)
         # patch embeding
         self.downsample_global = nn.Conv2d(2048, 1024, kernel_size=1)
         self.downsample = nn.Conv2d(2048, in_planes, kernel_size=1)
