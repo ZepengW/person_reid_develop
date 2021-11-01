@@ -1,13 +1,14 @@
 mode: train
-task-name: JointFormer-v0.4-duke
-gpu: [1]
+task-name: JointFormer-PCB-duke
+gpu: [0]
 
 
 model-manager:
-  network_name: jointformerv0.4 # the network model
-  save_name: JointFormer-v0.4
+  network_name: jointformer_pcb # the network model
+  save_name: jointformer_pcb
   network-params: # the params used to create model
     vit_pretrained_path: ./pretrained/jx_vit_base_p16_224-80ecf9dd.pth
+    pretrained: True
   network_inputs: ['img','heatmap'] # the data dict keys which the network input
   epoch: 120
   solver:

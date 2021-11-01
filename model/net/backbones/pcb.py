@@ -1,5 +1,6 @@
 from __future__ import absolute_import
 from __future__ import division
+from torchvision.models.utils import load_state_dict_from_url
 
 __all__ = ['pcb_p6', 'pcb_p4', 'pose_resnet50_256_p4', 'pose_resnet50_256_p6',
     'pose_resnet50_256_p6_pscore_reg', 'pose_resnet50_256_p4_pscore_reg']
@@ -345,7 +346,7 @@ class score_embedding(nn.Module):
 
 
 class PCB_Feature(nn.Module):
-    def __init__(self, block, layers, **kwargs):
+    def __init__(self, block, layers, pretrained=False, **kwargs):
         self.inplanes = 64
         super(PCB_Feature, self).__init__()
         self.feature_dim = 512 * block.expansion
@@ -359,6 +360,11 @@ class PCB_Feature(nn.Module):
         self.layer2 = self._make_layer(block, 128, layers[1], stride=2)
         self.layer3 = self._make_layer(block, 256, layers[2], stride=2)
         self.layer4 = self._make_layer(block, 512, layers[3], stride=1)
+
+        if pretrained:
+            #load resnet 50 as pretrained model
+            self.load_param('https://download.pytorch.org/models/resnet50-19c8e357.pth')
+
 
     def _make_layer(self, block, planes, blocks, stride=1):
         downsample = None
@@ -390,6 +396,13 @@ class PCB_Feature(nn.Module):
 
     def forward(self, x):
         return self.featuremaps(x)
+
+    def load_param(self, model_url):
+        param_dict = load_state_dict_from_url(model_url,progress=True)
+        for i in param_dict:
+            if ('fc' in i) or ('layer4' in i):
+                continue
+            self.state_dict()[i].copy_(param_dict[i])
 
 class Pose_Subnet(nn.Module):
     '''
