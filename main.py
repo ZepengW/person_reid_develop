@@ -67,11 +67,11 @@ def main(config, writer_tensorboardX):
     if 'train' == mode:
         logging.info("loading train data")
         batch_size_train = dataset_config.get('batch_size_train', 16)
-        num_pid_per_batch = dataset_config.get('num_pid_per_batch', 4)  # number of person per batch
+        num_instance = dataset_config.get('num_instance', 4)  # number of person with same id
         dataset_train = get_dataset('train', transform=t)
         data_sampler = RandomIdentitySampler(dataset_manager.get_dataset_list('train'),
                                                  batch_size_train,
-                                                 num_pid_per_batch)
+                                                 num_instance)
         loader_train_source = DataLoader(
             dataset_train,
             batch_size=batch_size_train,
