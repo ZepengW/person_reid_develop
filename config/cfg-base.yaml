@@ -1,5 +1,5 @@
 gpu: [0]
-eval_interval: 20 # eval each [eval_interval]
+eval_interval: 10 # eval each [eval_interval]
 vis: False       # visualize feature distribution
 vis_interval: 20  # visualization each [vis_interval]
 
@@ -43,5 +43,5 @@ dataset:
   num_workers: 8
   batch_size_train: 128
   batch_size_test: 128
-  num_pid_per_batch: 4
+  num_instance: 4
   type: image

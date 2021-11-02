@@ -1,5 +1,5 @@
 mode: train
-task-name: JointFormer-PCB-duke
+task-name: JointFormer-PCB-duke-pretrained
 gpu: [0]
 
 
@@ -21,12 +21,20 @@ model-manager:
     warmup_epochs: 5
     max_epoch: 120
   loss:
-    use_loss: ['cross_entropy','triplet']
+    use_loss: [cross_entropy]    # loss used for backward
     triplet:
       weight: 0.01
+      #list_weight: [1, 0, 0]
     cross_entropy:
-      weight: 0.99
-      list_weight: [0.75,0.25] # for output score is list
+      weight: 0.995
+      list_weight: [1, 1] # for output score is list
+    wrt:    # loss wrt params
+      weight: 0.001     # loss weight in total loss
+      except_input: 'feature'     # except input tensor type
+    xent_label_smooth:     # loss xent_label_smooth params
+      weight: 1.0
+      params_initial: ['num_classes']     # params used for initialize the loss object
+      except_input: 'score'       # except input tensor type
 
 
 dataset:
