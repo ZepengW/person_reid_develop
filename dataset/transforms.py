@@ -6,10 +6,10 @@ import torchvision.transforms as T
 import torch
 
 
-def build_transforms():
+def build_transforms(size):
     normalize_transform = T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
     transforms = T.Compose([
-        T.Resize([256, 128]),
+        T.Resize(size),
         #T.Pad(10),
         #T.RandomCrop([256, 128]),
         T.ToTensor(),
