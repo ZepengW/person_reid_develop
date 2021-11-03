@@ -8,8 +8,19 @@ from dataset import DatasetManager, DatasetVideo
 from model import ModelManager
 from torch.utils.data import DataLoader
 import yaml
+import numpy as np
+import random
 from tensorboardX import SummaryWriter
 
+
+def set_seed(seed):
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    np.random.seed(seed)
+    random.seed(seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = True
 
 # set cuda visible devices, and return the first gpu device
 def set_gpus_env(gpu_ids):
@@ -30,6 +41,7 @@ def set_gpus_env(gpu_ids):
 
 
 def main(config, writer_tensorboardX):
+    set_seed(config.get('seed',1234))
     device = set_gpus_env(config.get('gpu', [0]))
     vis_bool = config.get('vis', False)     # draw feature distribution
     vis_interval = config.get('vis_interval', 20)    # interval of drawing feature distribution
@@ -50,7 +62,6 @@ def main(config, writer_tensorboardX):
     mode = config.get('mode', 'train')
     dataset_type = dataset_config.get('type', 'image')
     get_dataset = getattr(dataset_manager, 'get_dataset_' + dataset_type)
-
     if 'train' == mode:
         logging.info("loading train data")
         loader_train_source = DataLoader(
@@ -67,18 +78,18 @@ def main(config, writer_tensorboardX):
             batch_size=dataset_config.get('batch_size_test', 16),
             num_workers=dataset_config.get('num_workers', 8),
             drop_last=False,
-            shuffle=True
+            shuffle=False
         )
         loader_query_source = DataLoader(
             get_dataset('query', transform=t),
             batch_size=dataset_config.get('batch_size_test', 16),
             num_workers=dataset_config.get('num_workers', 8),
             drop_last=False,
-            shuffle=True
+            shuffle=False
         )
         logging.info("load test data finish")
         logging.info("prepare to train from epoch[{0}] to epoch[{1}]".format(model.trained_epoches,
-                                                                             model_config.get('epoch', 64) - 1))
+                                                                             model_config.get('epoch', 64)))
         for i in range(model.trained_epoches+1, model_config.get('epoch', 64)+1):
             is_vis = (i % vis_interval == 0 or i == model_config.get('epoch', 64) - 1) #each vis_interval or last epoch
             is_vis = is_vis and vis_bool
@@ -88,18 +99,18 @@ def main(config, writer_tensorboardX):
     elif 'test' == mode:
         logging.info("loading test data")
         loader_gallery_source = DataLoader(
-            get_dataset('test', transform=t, transform_mask=t_mask),
+            get_dataset('test', transform=t),
             batch_size=dataset_config.get('batch_size_test', 16),
             num_workers=dataset_config.get('num_workers', 8),
             drop_last=False,
-            shuffle=True
+            shuffle=False
         )
         loader_query_source = DataLoader(
-            get_dataset('query', transform=t, transform_mask=t_mask),
+            get_dataset('query', transform=t),
             batch_size=dataset_config.get('batch_size_test', 16),
             num_workers=dataset_config.get('num_workers', 8),
             drop_last=False,
-            shuffle=True
+            shuffle=False
         )
         logging.info("load test data finish")
         model.test(loader_query_source, loader_gallery_source, is_vis=vis_bool)
@@ -122,13 +133,13 @@ def init_logging(task_name=''):
     if not os.path.isdir(f'./output/log/{log_dir_name}'):
         os.mkdir(f'./output/log/{log_dir_name}')
     logging.basicConfig(filename=f'./output/log/{log_dir_name}/log.txt',
-                        level=logging.DEBUG,
+                        level=logging.INFO,
                         format='###%(levelname)s###[%(asctime)s]%(message)s',
                         datefmt='%Y-%m-%d %H:%M:%S')
     console = logging.StreamHandler()
     console.setLevel(logging.INFO)
     console.setFormatter(logging.Formatter('[%(asctime)s]%(message)s', datefmt='%Y-%m-%d %H:%M:%S'))
-    logging.getLogger('').addHandler(console)
+    logging.getLogger().addHandler(console)
     print(f'writing log to ./output/log/{log_dir_name}')
     return log_dir_name
 
