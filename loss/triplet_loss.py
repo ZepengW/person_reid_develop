@@ -109,7 +109,7 @@ class TripletLoss(object):
             loss = self.ranking_loss(dist_an, dist_ap, y)
         else:
             loss = self.ranking_loss(dist_an - dist_ap, y)
-        return loss, dist_ap, dist_an
+        return loss#, dist_ap, dist_an
 
 class CrossEntropyLabelSmooth(nn.Module):
     """Cross entropy loss with label smoothing regularizer.
@@ -179,4 +179,4 @@ class WeightedRegularizedTriplet(object):
         y = furthest_positive.new().resize_as_(furthest_positive).fill_(1)
         loss = self.ranking_loss(closest_negative - furthest_positive, y)
 
-        return loss, furthest_positive, closest_negative
+        return loss#, furthest_positive, closest_negative

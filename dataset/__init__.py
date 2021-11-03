@@ -34,6 +34,8 @@ class DatasetManager(object):
     def get_train_pid_num(self):
         return self.dataset.num_train_pids
 
+    def get_dataset_list(self, mode):
+        return getattr(self.dataset, mode)
 
     def get_dataset_image(self, mode, transform=None, transform_mask=None):
         if not hasattr(self.dataset, mode):
