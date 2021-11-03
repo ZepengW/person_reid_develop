@@ -160,7 +160,7 @@ def log_dataset_config(dataset_config:dict):
     logging.info(f'----num_instance:{dataset_config.get("num_instance", 4)}')
     logging.info(f'----batch_size_test:{dataset_config.get("batch_size_test", 16)}')
     logging.info(f'----transform method:{dataset_config.get("transform","None")}')
-    logging.info(f'----num_workers:{dataset_config.get("num_workers"), 8}')
+    logging.info(f'----num_workers:{dataset_config.get("num_workers", 8)}')
 
 
 def merge_data(data_1, data_2):

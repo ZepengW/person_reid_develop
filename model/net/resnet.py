@@ -217,8 +217,8 @@ class ResNet(nn.Module):
 
         return img, f
 
-    def forward(self, x):
-        return self._forward_impl(x)
+    def forward(self, img):
+        return self._forward_impl(img)
 
 
 def _resnet(arch, block, layers, pretrained, progress, **kwargs):
