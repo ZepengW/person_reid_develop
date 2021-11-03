@@ -1,13 +1,14 @@
 import logging
 from .net.resnet import resnet50
-from .net.joint_transformer import JointFromer,JointFromerPCB
+from .net.joint_transformer import JointFromer,JointFromerPCB,OnlyPCB
 from .net.transreid import TransReID
 
 __factory_model = {
     'resnet50': resnet50,
     'jointformer': JointFromer,
     'transreid': TransReID,
-    'jointformer_pcb': JointFromerPCB
+    'jointformer_pcb': JointFromerPCB,
+    'only_pcb': OnlyPCB
 }
 
 

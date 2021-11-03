@@ -128,7 +128,7 @@ class JointFromerPCB(nn.Module):
     Joint Transformer using PCB to generate feature map
     '''
 
-    def __init__(self, num_classes,vit_pretrained_path=None, parts = 18, in_planes = 768, pretrained=True, **kwargs):
+    def __init__(self, num_classes,vit_pretrained_path=None, parts = 18, in_planes = 768, feature_mode = 'pcb_vit_part', pretrained=True, **kwargs):
         super(JointFromerPCB, self).__init__()
         self.parts = parts
         self.num_classes = num_classes
@@ -157,7 +157,11 @@ class JointFromerPCB(nn.Module):
         # feature fusion
         self.feat_fuse = torch.nn.AdaptiveMaxPool1d(1)
         # classify layer
-        self.classify = nn.Linear(2 * self.in_planes + 1024, self.num_classes, bias=False)
+        self.feature_mode = feature_mode
+        if self.feature_mode == 'pcb_vit_part':
+            self.classify = nn.Linear(2 * self.in_planes + 1024, self.num_classes, bias=False)
+        elif self.feature_mode == 'vit_part':
+            self.classify = nn.Linear(2 * self.in_planes, self.num_classes, bias=False)
 
     def forward(self, img, heatmap):
         B = img.shape[0]
@@ -186,13 +190,64 @@ class JointFromerPCB(nn.Module):
         feats_part_vit = self.feat_fuse(feats_part_vit)
         feats_part_vit = feats_part_vit.squeeze()
         feats_part_vit = self.bottleneck_part(feats_part_vit)
-        feats = torch.cat([feats_global, feats_whole_vit, feats_part_vit], dim=1)
+        if self.feature_mode == 'pcb_vit_part':
+            feats = torch.cat([feats_global, feats_whole_vit, feats_part_vit], dim=1)
+            # output
+            if self.training:
+                score = self.classify(feats)
+                return score,feats
+            else:
+                return feats
+        elif self.feature_mode == 'vit_part':
+            feats = torch.cat([feats_whole_vit, feats_part_vit], dim=1)
+            # output
+            if self.training:
+                score = self.classify(feats)
+                return score,feats
+            else:
+                return feats
+
+
+class OnlyPCB(nn.Module):
+    '''
+    Joint Transformer using PCB to generate feature map
+    '''
+
+    def __init__(self, num_classes, pretrained=True, **kwargs):
+        super(OnlyPCB, self).__init__()
+        self.num_classes = num_classes
+        # extract feature
+        self.feature_map_extract = PCB_Feature(block=Bottleneck, layers=[3,4,6,3], pretrained=pretrained)
+        # patch embeding
+        self.downsample_global = nn.Conv2d(2048, 1024, kernel_size=1)
+        #self.proj = torch.nn.AdaptiveAvgPool2d((1,1))
+        self.proj = torch.nn.AdaptiveMaxPool2d((1,1))
+        # bottleneck
+        self.bottleneck = nn.BatchNorm1d(1024)
+        self.bottleneck.bias.requires_grad_(False)
+        self.bottleneck.apply(weights_init_kaiming)
+        # feature fusion
+        self.feat_fuse = torch.nn.AdaptiveMaxPool1d(1)
+        # classify layer
+        self.classify = nn.Linear(1024, self.num_classes, bias=False)
+
+    def forward(self, img):
+        #extract feature
+        feat_map = self.feature_map_extract(img)
+        feats_global = self.proj(feat_map) # (b, 2048, 1, 1)
+        feats_global = self.downsample_global(feats_global)
+        feats_global = feats_global.squeeze()
+
+        # bottleneck
+        feats = self.bottleneck(feats_global)
         # output
         if self.training:
             score = self.classify(feats)
             return score,feats
         else:
             return feats
+
+
 
 
 def weights_init_classifier(m):
