@@ -47,11 +47,12 @@ def main(config, writer_tensorboardX):
     vis_interval = config.get('vis_interval', 20)    # interval of drawing feature distribution
     eval_interval = config.get('eval_interval', 20)
 
-    ### pre transform methods on images
-    t = tf.build_transforms()
-    t_mask = tf.build_transforms_mask()
 
     dataset_config = config.get('dataset', dict())
+    log_dataset_config(dataset_config)
+    size = dataset_config.get('image_size', [256,128])
+    ### pre transform methods on images
+    t = tf.build_transforms(size)
     dataset_manager = DatasetManager(dataset_config.get('dataset_name', ''), dataset_config.get('dataset_path', ''),
                                      num_mask=dataset_config.get('num-mask', 6))
 
@@ -142,6 +143,18 @@ def init_logging(task_name=''):
     logging.getLogger().addHandler(console)
     print(f'writing log to ./output/log/{log_dir_name}')
     return log_dir_name
+
+def log_dataset_config(dataset_config:dict):
+    logging.info('=> DataSet Info:')
+    logging.info(f'----dataset:{dataset_config.get("dataset_name")}')
+    logging.info(f'----path:{dataset_config.get("dataset_path")}')
+    logging.info(f'----img_size:{dataset_config.get("image_size",[256, 128])}')
+    logging.info(f'----batch_size_train:{dataset_config.get("batch_size_train", 16)}')
+    logging.info(f'----num_instance:{dataset_config.get("num_instance", 4)}')
+    logging.info(f'----batch_size_test:{dataset_config.get("batch_size_test", 16)}')
+    logging.info(f'----transform method:{dataset_config.get("transform","None")}')
+    logging.info(f'----num_workers:{dataset_config.get("num_workers"), 8}')
+
 
 def merge_data(data_1, data_2):
     """
