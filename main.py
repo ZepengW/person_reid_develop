@@ -11,6 +11,8 @@ import yaml
 import numpy as np
 import random
 from tensorboardX import SummaryWriter
+from dataset.sampler import RandomIdentitySampler
+
 
 
 def set_seed(seed):
@@ -65,12 +67,17 @@ def main(config, writer_tensorboardX):
     get_dataset = getattr(dataset_manager, 'get_dataset_' + dataset_type)
     if 'train' == mode:
         logging.info("loading train data")
+        batch_size_train = dataset_config.get('batch_size_train', 16)
+        num_instance = dataset_config.get('num_instance', 4)  # number of person with same id
+        dataset_train = get_dataset('train', transform=t)
+        data_sampler = RandomIdentitySampler(dataset_manager.get_dataset_list('train'),
+                                                 batch_size_train,
+                                                 num_instance)
         loader_train_source = DataLoader(
-            get_dataset('train', transform=t, transform_mask=t_mask),
-            batch_size=dataset_config.get('batch_size_train', 16),
+            dataset_train,
+            batch_size=batch_size_train,
             num_workers=dataset_config.get('num_workers', 8),
-            drop_last=False,
-            shuffle=True
+            sampler=data_sampler
         )
         logging.info("load train data finish")
         logging.info("loading test data")
