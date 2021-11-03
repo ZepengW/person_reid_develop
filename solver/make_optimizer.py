@@ -1,5 +1,5 @@
 import torch
-
+import logging
 
 def make_optimizer(cfg_solver:dict, model, center_criterion= None):
     """
@@ -9,12 +9,21 @@ def make_optimizer(cfg_solver:dict, model, center_criterion= None):
     :param center_criterion:
     :return: optimizer, optimizer_center
     """
+    optimizer = cfg_solver.get('optimizer', 'Adam')
+    lr_base = cfg_solver.get('base_lr', 0.0003)
+    weight_decay_base = cfg_solver.get('weight_decay', 0.0005)
+    logging.info(f'=> Initial Optimizer:{optimizer}')
+    logging.info(f'----base_lr:{lr_base}')
+    logging.info(f'----weight_decay:{weight_decay_base}')
+    logging.info(f'----bias_lr_factor:{cfg_solver.get("bias_lr_factor", 1)}')
+    logging.info(f'----weight_decay_bias:{cfg_solver.get("weight_decay_bias", 0.0005)}')
+    logging.info(f'----large_fc_lr:{cfg_solver.get("large_fc_lr", False)}')
     params = []
     for key, value in model.named_parameters():
         if not value.requires_grad:
             continue
-        lr = cfg_solver.get('base_lr', 0.0003)
-        weight_decay = cfg_solver.get('weight_decay', 0.0005)
+        lr = lr_base
+        weight_decay = weight_decay_base
         if "bias" in key:
             lr = lr * cfg_solver.get('bias_lr_factor', 1)
             weight_decay = cfg_solver.get('weight_decay_bias', 0.0005)
@@ -26,7 +35,7 @@ def make_optimizer(cfg_solver:dict, model, center_criterion= None):
 
         params += [{"params": [value], "lr": lr, "weight_decay": weight_decay}]
 
-    optimizer = cfg_solver.get('optimizer', 'Adam')
+
     if optimizer == 'SGD':
         optimizer = getattr(torch.optim, optimizer)(params, momentum=cfg_solver.get('momentum', 0.9))
     elif optimizer == 'AdamW':

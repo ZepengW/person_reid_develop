@@ -102,7 +102,7 @@ class ModelManager:
         bool_warning = False
         # learning rate adjust
         self.scheduler.step(epoch)
-        logging.info(f"[Epoch:{epoch:0>4d}] Training... Base Lr:{self.scheduler._get_lr(epoch)[0]:.2e}".center(50,'='))
+        logging.info(f"[Training...] Epoch:{epoch:0>3d} Base Lr:{self.scheduler._get_lr(epoch)[0]:.2e}".center(80,'='))
         for idx, data_dict in enumerate(dataloader):
             self.optimizer.zero_grad()
             # extract ids
@@ -126,9 +126,9 @@ class ModelManager:
                 loss_avg_batch = np.mean(np.array(loss_value_l[idx + 1 - 50:idx + 1]), axis=0)
                 loss_str_batch = f' '.join([f'[{name}:{loss_avg_batch[i]:.4f}]' for i, name in enumerate(loss_name)])
                 logging.info(
-                    f'[E{epoch:0>4d}|Batch:{idx+1:0>4d}/{batch_num:0>4d}] '
+                    f'[E{epoch:0>3d}|Batch:{idx+1:0>4d}/{batch_num:0>4d}] '
                     f'LOSS=[total:{np.mean(np.array(total_loss_l[idx + 1 - 50:idx + 1])):.4f}]')
-                logging.info(f'[E{epoch:0>4d}|Batch:{idx+1:0>4d}/{batch_num:0>4d}] LOSS Detail:' + loss_str_batch)
+                logging.info(f'[E{epoch:0>3d}|Batch:{idx+1:0>4d}/{batch_num:0>4d}] LOSS Detail:' + loss_str_batch)
 
             # update model
             total_loss.backward()
@@ -137,15 +137,17 @@ class ModelManager:
             # vis features
             pids_l += ids.tolist()  # record pid for visualization
             if is_vis:
+                if isinstance(feat,list):
+                    feat = feat[0]
                 f = PCA_svd(feat, 3)
                 features_vis = features_vis + f.tolist()
 
         #loging the loss
         total_loss_avg = np.mean(np.array(total_loss_l))
-        logging.info('[Epoch:{:0>4d}] LOSS=[total:{:.4f}]'.format(epoch, total_loss_avg))
+        logging.info('[Epoch:{:0>3d}] LOSS=[total:{:.4f}]'.format(epoch, total_loss_avg))
         loss_avg = np.mean(np.array(loss_value_l),axis=0)
         loss_str = ' '.join([f'[{name}:{loss_avg[i]:.4f}]' for i, name in enumerate(loss_name)])
-        logging.info(f'[Epoch:{epoch:0>4d}] LOSS Detail : '+loss_str)
+        logging.info(f'[Epoch:{epoch:0>3d}] LOSS Detail : '+loss_str)
         if self.writer is not None:
             self.writer.add_scalar('train/loss', total_loss_avg, epoch)
             for i, name in enumerate(loss_name):
@@ -153,10 +155,10 @@ class ModelManager:
             if is_vis:
                 self.writer.add_embedding(features_vis, metadata=pids_l, global_step=epoch, tag='train')
         self.save_model(self.net, self.model_name, epoch)
-        logging.info(f"[Epoch:{epoch:0>4d}] Train Finish".center(50,'='))
+        logging.info("Train Finish")
 
     def test(self, queryLoader: DataLoader, galleryLoader: DataLoader, epoch = 0, is_vis = False):
-        logging.info("[begin to test]".center(50,'='))
+        logging.info(f"[Testing...] Epoch:{epoch:>3d}".center(80,'='))
         self.net.eval()
         gf = []
         gPids = np.array([], dtype=int)
@@ -239,7 +241,7 @@ class ModelManager:
                 features_test = torch.cat([gf, qf])
                 labels = gPids.tolist() + qPids.tolist()
                 self.writer.add_embedding(features_test, metadata=labels, global_step=epoch, tag='test')
-        logging.info("[test finish]".center(50,'='))
+        logging.info("[Test Finish]".center(80,'='))
 
 def PCA_svd(X, k, center=True):
     n = X.size()[0]

@@ -16,7 +16,9 @@ def make_loss(loss_cfg: dict, **params):
     loss_name_l = []
     loss_input = []
     weight_per_loss_l = []
-    for key in loss_cfg.get('use_loss',['cross_entropy']):
+    use_loss = loss_cfg.get('use_loss',['cross_entropy'])
+    logging.info(f'=> Initialing Loss Function: {use_loss}')
+    for key in use_loss:
         if not key in __factory_loss.keys():
             logging.warning(f'Can Not Find Loss Function : {key}')
             continue
@@ -28,10 +30,15 @@ def make_loss(loss_cfg: dict, **params):
             if param_name in params.keys():
                 params_input[param_name] = params[param_name]
         loss_func_l.append(__factory_loss[key](**params_input))
-        loss_weight_l.append(loss_params.get('weight',1.0))
+        loss_weight = loss_params.get('weight',1.0)
+        loss_weight_l.append(loss_weight)
+        logging.info(f'----loss:{key}')
+        logging.info(f'------weight:{loss_weight}')
         loss_name_l.append(key)
         loss_input.append(loss_params.get('except_input'))
-        weight_per_loss_l.append(loss_params.get('list_weight', []))
+        weight_per_loss = loss_params.get('list_weight', [])
+        weight_per_loss_l.append(weight_per_loss)
+        logging.info(f'------list_weight(if need):{weight_per_loss}')
 
     def loss_func(inputs, feats, targets):
         '''
