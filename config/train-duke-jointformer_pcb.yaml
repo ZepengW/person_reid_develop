@@ -1,5 +1,5 @@
 mode: train
-task-name: JointFormer-PCB-duke-pretrained-vit_part
+task-name: JointFormer-PCB-duke-pretrained-vit_parts
 gpu: [0]
 
 
@@ -9,7 +9,7 @@ model-manager:
   network-params: # the params used to create model
     vit_pretrained_path: ./pretrained/jx_vit_base_p16_224-80ecf9dd.pth
     pretrained: True
-    feature_mode: vit_part
+    feature_mode: vit_parts
   network_inputs: ['img','heatmap'] # the data dict keys which the network input
   epoch: 120
   solver:
@@ -28,7 +28,7 @@ model-manager:
       #list_weight: [1, 0, 0]
     cross_entropy:
       weight: 0.995
-      list_weight: [1, 1] # for output score is list
+      list_weight: [1, 1, 0.5, 0.2, 0.2] # for output score is list
     wrt:    # loss wrt params
       weight: 0.001     # loss weight in total loss
       except_input: 'feature'     # except input tensor type
