@@ -76,7 +76,8 @@ class DatasetImage(Dataset):
         img = Image.open(img_path).convert('RGB')
         if self.transform is not None:
             img = self.transform(img)
-        return img, p_id, cam_id,clothes_id
+        data_dict = {'img':img, 'pid':p_id, 'camera_id':cam_id, 'clothes_id':clothes_id}
+        return data_dict
 
 
 class DatasetVideo(Dataset):

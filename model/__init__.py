@@ -94,15 +94,21 @@ class ModelManager:
         features_vis = []
         # learning rate adjust
         self.scheduler.step(epoch)
-        logging.info(f"[Epoch:{epoch:0>4d}] Training... Base Lr:{self.scheduler._get_lr(epoch)[0]:.2e}".center(50,'='))
-        for idx, (imgs, ids, _, _) in enumerate(dataloader):
+        logging.info(f"[Training...] Epoch:{epoch:0>3d} Base Lr:{self.scheduler._get_lr(epoch)[0]:.2e}".center(80,'='))
+        for idx, data_dict in enumerate(dataloader):
             self.optimizer.zero_grad()
-
-            # extract body part features
-            imgs = imgs.to(self.device)
-            c_global, f = self.net(imgs)
-            ids = ids.to(self.device)
-            total_loss, loss_value, loss_name = self.lossesFunction(c_global,f,ids)
+            # extract ids
+            ids = data_dict.get('pid').to(self.device)
+            # convert data inputted the network to self.device
+            input_data = dict()
+            for l in self.input_keys:
+                if not l in data_dict.keys():
+                    logging.error('data_dict does not contain the data(key) which needed to input the network')
+                    return
+                else:
+                    input_data[l] = data_dict[l].to(self.device)
+            score, feat = self.net(**input_data)
+            total_loss, loss_value, loss_name = self.lossesFunction(score,feat,ids)
 
             total_loss_l.append(float(total_loss.cpu()))
             loss_value_l.append(loss_value)
