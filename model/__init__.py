@@ -1,3 +1,4 @@
+from math import inf
 import torch
 import os
 import logging
@@ -13,14 +14,19 @@ from loss import make_loss
 
 
 
+
 class ModelManager:
     def __init__(self, cfg: dict, device, class_num=1000, writer: SummaryWriter = None):
         self.device = device
-        self.model_name = cfg.get('name', 'default-network')
+        self.model_name = cfg.get('save_name', 'model-no-name')
 
         # model load
         # add your own network here
-        self.net = make_model(cfg.get('network_name'),cfg.get('network-params',dict()))
+        network_params = cfg.get('network-params',dict())
+        network_params['num_classes'] = class_num
+        self.net = make_model(cfg.get('network_name'),network_params)
+        # data keys which the network input
+        self.input_keys = cfg.get('network_inputs', ['img','pid'])
 
         # Multi-GPU Set
         if torch.cuda.device_count() > 1:
@@ -52,6 +58,7 @@ class ModelManager:
         self.re_ranking = cfg.get('re_ranking', True)
         #tensorboardX
         self.writer = writer
+
 
     @staticmethod
     def load_model(model, name):
@@ -92,6 +99,7 @@ class ModelManager:
         loss_value_l = []
         pids_l = []
         features_vis = []
+        bool_warning = False
         # learning rate adjust
         self.scheduler.step(epoch)
         logging.info(f"[Training...] Epoch:{epoch:0>3d} Base Lr:{self.scheduler._get_lr(epoch)[0]:.2e}".center(80,'='))
@@ -118,24 +126,28 @@ class ModelManager:
                 loss_avg_batch = np.mean(np.array(loss_value_l[idx + 1 - 50:idx + 1]), axis=0)
                 loss_str_batch = f' '.join([f'[{name}:{loss_avg_batch[i]:.4f}]' for i, name in enumerate(loss_name)])
                 logging.info(
-                    f'[E{epoch:0>4d}|Batch:{idx+1:0>4d}/{batch_num:0>4d}] '
-                    f'LOSS=[total:{np.mean(np.array(total_loss_l[idx + 1 - 50:idx + 1])):.4f}] | ' + loss_str_batch)
+                    f'[E{epoch:0>3d}|Batch:{idx+1:0>4d}/{batch_num:0>4d}] '
+                    f'LOSS=[total:{np.mean(np.array(total_loss_l[idx + 1 - 50:idx + 1])):.4f}]')
+                logging.info(f'[E{epoch:0>3d}|Batch:{idx+1:0>4d}/{batch_num:0>4d}] LOSS Detail:' + loss_str_batch)
 
             # update model
             total_loss.backward()
             self.optimizer.step()
 
-            #vis features
+            # vis features
             pids_l += ids.tolist()  # record pid for visualization
-            f = PCA_svd(f,3)
-            features_vis = features_vis + f.tolist()
+            if is_vis:
+                if isinstance(feat,list):
+                    feat = feat[0]
+                f = PCA_svd(feat, 3)
+                features_vis = features_vis + f.tolist()
 
         #loging the loss
         total_loss_avg = np.mean(np.array(total_loss_l))
-        logging.info('[Epoch:{:0>4d}] LOSS=[total:{:.4f}]'.format(epoch, total_loss_avg))
+        logging.info('[Epoch:{:0>3d}] LOSS=[total:{:.4f}]'.format(epoch, total_loss_avg))
         loss_avg = np.mean(np.array(loss_value_l),axis=0)
         loss_str = ' '.join([f'[{name}:{loss_avg[i]:.4f}]' for i, name in enumerate(loss_name)])
-        logging.info(f'[Epoch:{epoch:0>4d}] LOSS Detail : '+loss_str)
+        logging.info(f'[Epoch:{epoch:0>3d}] LOSS Detail : '+loss_str)
         if self.writer is not None:
             self.writer.add_scalar('train/loss', total_loss_avg, epoch)
             for i, name in enumerate(loss_name):
@@ -143,60 +155,93 @@ class ModelManager:
             if is_vis:
                 self.writer.add_embedding(features_vis, metadata=pids_l, global_step=epoch, tag='train')
         self.save_model(self.net, self.model_name, epoch)
-        logging.info(f"[Epoch:{epoch:0>4d}] Train Finish".center(50,'='))
+        logging.info("Train Finish")
 
     def test(self, queryLoader: DataLoader, galleryLoader: DataLoader, epoch = 0, is_vis = False):
-        logging.info("[begin to test]".center(50,'='))
+        logging.info(f"[Testing...] Epoch:{epoch:>3d}".center(80,'='))
         self.net.eval()
         gf = []
         gPids = np.array([], dtype=int)
         gCids = np.array([], dtype=int)
+        gClothesids = np.array([], dtype=int)
         logging.info("compute features of gallery samples")
-        for idx, (imgs, pids, cids, clothes_ids) in enumerate(galleryLoader):
-            imgs = imgs.to(self.device)
+        for idx, data_dict in enumerate(galleryLoader):
+            # extract ids
+            pids = data_dict.get('pid')
+            cids = data_dict.get('camera_id')
+            clothes_ids = data_dict.get('clothes_id')
+            # convert data inputted the network to self.device
+            input_data = dict()
+            for l in self.input_keys:
+                if not l in data_dict.keys():
+                    logging.error('data_dict does not contain the data(key) which needed to input the network')
+                    return
+                else:
+                    input_data[l] = data_dict[l].to(self.device)
             with torch.no_grad():
-                c, f_whole = self.net(imgs)
+                f_whole = self.net(**input_data)
                 gf.append(f_whole)
                 gPids = np.concatenate((gPids, pids.numpy()), axis=0)
                 gCids = np.concatenate((gCids, cids.numpy()), axis=0)
+                gClothesids = np.concatenate((gClothesids, clothes_ids.numpy()), axis=0)
         gf = torch.cat(gf, dim=0)
 
         logging.info("compute features of query samples")
         qf = []
         qPids = np.array([], dtype=int)
         qCids = np.array([], dtype=int)
-        for idx, (imgs, pids, cids, clothes_ids) in enumerate(queryLoader):
-            imgs = imgs.to(self.device)
+        qClothesids = np.array([], dtype=int)
+        for idx, data_dict in enumerate(queryLoader):
+            # extract ids
+            pids = data_dict.get('pid')
+            cids = data_dict.get('camera_id')
+            clothes_ids = data_dict.get('clothes_id')
+            # convert data inputted the network to self.device
+            input_data = dict()
+            for l in self.input_keys:
+                if not l in data_dict.keys():
+                    logging.error('data_dict does not contain the data(key) which needed to input the network')
+                    return
+                else:
+                    input_data[l] = data_dict[l].to(self.device)
             with torch.no_grad():
-                c,f_whole = self.net(imgs)
+                f_whole = self.net(**input_data)
                 qf.append(f_whole)
                 qPids = np.concatenate((qPids, pids.numpy()), axis=0)
                 qCids = np.concatenate((qCids, cids.numpy()), axis=0)
+                qClothesids = np.concatenate((qClothesids, clothes_ids.numpy()), axis=0)
         qf = torch.cat(qf, dim=0)
 
         logging.info("compute rank list and score")
-        # m, n = qf.shape[0], gf.shape[0]
-        # distmat = torch.pow(qf, 2).sum(dim=1, keepdim=True).expand(m, n) + \
-        #           torch.pow(gf, 2).sum(dim=1, keepdim=True).expand(n, m).t()
-        # distmat.addmm_(qf, gf.t(),beta = 1, alpha = -2)
-        # distmat = distmat.cpu().numpy()
         distmat = compute_dis_matrix(qf,gf,self.metrics, self.re_ranking)
-        cmc, mAP, mINP = eval_func(distmat, qPids, gPids, qCids, gCids)
-        logging.info("test result:[rank-1:{:.2%}],[rank-3:{:.2%}],[rank-5:{:.2%}],[rank-10:{:.2%}]"
-                     .format(cmc[0], cmc[2], cmc[4], cmc[9]))
-        logging.info("test result:[mAP:{:.2%}],[mINP:{:.2%}]".format(mAP, mINP))
+        # standard mode
+        cmc_s, mAP_s, mINP_s = eval_func(distmat, qPids, gPids, qCids, gCids)
+        # clothes changing mode
+        # cmc_c, mAP_c, mINP_c = eval_func(distmat, qPids, gPids, qCids, gCids, q_clo_ids=qClothesids,
+        #                                  g_clo_ids=gClothesids)
+        logging.info(f'standard mode test result:[rank-1:{cmc_s[0]:.2%}],[rank-3:{cmc_s[2]:.2%}]'
+                     f',[rank-5:{cmc_s[4]:.2%}],[rank-10:{cmc_s[9]:.2%}]')
+        logging.info(f'standard mode test result:[mAP:{mAP_s:.2%}],[mINP:{mINP_s:.2%}]')
+        # logging.info(f'clothes changing mode test result:[rank-1:{cmc_c[0]:.2%}],[rank-3:{cmc_c[2]:.2%}]'
+        #              f',[rank-5:{cmc_c[4]:.2%}],[rank-10:{cmc_c[9]:.2%}]')
+        # logging.info(f'clothes changing mode test result:[mAP:{mAP_c:.2%}],[mINP:{mINP_c:.2%}]')
         if self.writer is not None:
-            self.writer.add_scalar('test/rank-1', cmc[0], epoch)
-            self.writer.add_scalar('test/mAP', mAP, epoch)
-            self.writer.add_scalar('test/mINP', mINP, epoch)
-            # for i, p in enumerate(cmc):
-            #     self.writer.add_scalar(f'test-cmc/e{epoch}',p,i)
+            self.writer.add_scalar('test-standard/rank-1', cmc_s[0], epoch)
+            self.writer.add_scalar('test-standard/mAP', mAP_s, epoch)
+            self.writer.add_scalar('test-standard/mINP', mINP_s, epoch)
+            # for i, p in enumerate(cmc_s):
+            #     self.writer.add_scalar(f'test-standard/cmc/e{epoch}', p, i)
+            # self.writer.add_scalar('test-changing/rank-1', cmc_c[0], epoch)
+            # self.writer.add_scalar('test-changing/mAP', mAP_c, epoch)
+            # self.writer.add_scalar('test-changing/mINP', mINP_c, epoch)
+            # for i, p in enumerate(cmc_c):
+            #     self.writer.add_scalar(f'test-changing/cmc/e{epoch}', p, i)
             # feature visualization
             if is_vis:
-                features_test = torch.cat([gf,qf])
+                features_test = torch.cat([gf, qf])
                 labels = gPids.tolist() + qPids.tolist()
                 self.writer.add_embedding(features_test, metadata=labels, global_step=epoch, tag='test')
-        logging.info("[test finish]".center(50,'='))
+        logging.info("[Test Finish]".center(80,'='))
 
 def PCA_svd(X, k, center=True):
     n = X.size()[0]
