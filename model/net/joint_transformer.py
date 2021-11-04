@@ -419,7 +419,7 @@ class JointFromerV0_6(nn.Module):
             score3 = self.classify_3(feats_parts[:, 2])
             return [score1, score2, score3], [feats_parts[:,0],feats_parts[:,1],feats_parts[:,2]]
         else:
-            return feats_parts
+            return feats_parts.reshape([b,-1])
 
 
 
