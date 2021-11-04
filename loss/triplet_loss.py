@@ -161,7 +161,7 @@ class WeightedRegularizedTriplet(object):
     def __init__(self, **kwargs):
         self.ranking_loss = nn.SoftMarginLoss()
 
-    def __call__(self, feats, targets, normalize_feature=False, **kwargs):
+    def __call__(self, feats, targets, normalize_feature=True, **kwargs):
         if normalize_feature:
             feats = normalize(feats, axis=-1)
         dist_mat = euclidean_dist(feats, feats)

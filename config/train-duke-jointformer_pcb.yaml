@@ -22,16 +22,17 @@ model-manager:
     warmup_epochs: 5
     max_epoch: 120
   loss:
-    use_loss: [cross_entropy]    # loss used for backward
+    use_loss: [cross_entropy, wrt]    # loss used for backward
     triplet:
       weight: 0.01
       #list_weight: [1, 0, 0]
     cross_entropy:
-      weight: 0.995
+      weight: 1
       list_weight: [1, 1, 0.5, 0.2, 0.2] # for output score is list
     wrt:    # loss wrt params
-      weight: 0.001     # loss weight in total loss
+      weight: 1     # loss weight in total loss
       except_input: 'feature'     # except input tensor type
+      list_weight: [1, 1, 0.5, 0.2, 0.2]
     xent_label_smooth:     # loss xent_label_smooth params
       weight: 1.0
       params_initial: ['num_classes']     # params used for initialize the loss object
