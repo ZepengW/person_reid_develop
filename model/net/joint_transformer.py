@@ -340,6 +340,91 @@ class OnlyPCB(nn.Module):
 
 
 
+class JointFromerV0_6(nn.Module):
+    '''
+    Joint Transformer v0.6
+
+    '''
+
+    def __init__(self, num_classes, vit_pretrained_path=None, parts=18, in_planes=768, pretrained=True, **kwargs):
+        super(JointFromerV0_6, self).__init__()
+        self.parts = parts
+        self.num_classes = num_classes
+        self.in_planes = in_planes
+        # extract feature
+        self.feature_map_extract = PCB_Feature(block=Bottleneck, layers=[3, 4, 6, 3], pretrained=pretrained)
+        # patch embeding
+        self.downsample_to_vit = nn.Conv2d(2048, self.in_planes, kernel_size=1)
+        # vit backbone network
+        self.transformer = TransReID(num_classes=num_classes, num_patches=24*8, embed_dim=self.in_planes, depth=12,
+                                     num_heads=12, mlp_ratio=4, qkv_bias=True, drop_path_rate=0.1)
+        if not vit_pretrained_path is None:
+            self.transformer.load_param(vit_pretrained_path)
+
+        # feature fusion
+        self.max_pool = torch.nn.AdaptiveMaxPool2d((1,1))
+
+        # body part id
+        self.fuse_heatmap = torch.nn.AdaptiveMaxPool1d(1)
+        self.parts_id = [
+            torch.tensor([0, 14, 15, 16, 17]),  # head
+            torch.tensor([1, 2, 3, 4, 5, 6, 7, 8, 11]),  # upper body
+            torch.tensor([8, 9, 10, 11, 12, 13])  # lower body
+        ]
+        self.classify_1 = torch.nn.Linear(self.in_planes, num_classes)
+        self.classify_2 = torch.nn.Linear(self.in_planes, num_classes)
+        self.classify_3 = torch.nn.Linear(self.in_planes, num_classes)
+
+    def forward(self, img, heatmap):
+        B = img.shape[0]
+        P = heatmap.shape[1]
+        heatmap = torch.clamp(heatmap, 0.01, 0.99)
+        # extract feature
+        feat_map = self.feature_map_extract(img)    # shape: B,2048,24,8
+        feat_map = self.downsample_to_vit(feat_map)  # shape: B, in_planes, 24, 8
+        # feat_parts = torch.einsum('bchw,bphw->bpchw', feat_map, heatmap)
+        # patch embedding: Means processing for non-zero elements
+        feat_patches = feat_map.reshape([B, self.in_planes, -1])   # shape: B, in_planes, 24*8
+        feat_patches = feat_patches.permute([0,2,1])
+        # transformer
+        feats_att = self.transformer(feat_patches)  # shape: B, in_planes, 24*8
+        # bottleneck
+        # split whole feature and partial features extracted by vit
+        # whole feature
+        feats_att_cls = feats_att[:, 0] # shape: B, in_planes
+        feats_att = feats_att[:,1:]     # shape: B, 24*8, in_planes
+        feats_att = feats_att.reshape([B, self.in_planes, 24, 8])
+        # fuse heatmap
+        heatmap_fuse = []
+        for ids in self.parts_id:
+            heatmap_part = heatmap[:, ids]
+            b,p,h,w = heatmap_part.shape
+            heatmap_part = heatmap_part.reshape([b,p,h*w])
+            heatmap_part = heatmap_part.permute([0, 2, 1])
+            heatmap_part = self.fuse_heatmap(heatmap_part) # shape: b,h*w,1
+            heatmap_part = heatmap_part.squeeze() # shape: b,h*w
+            heatmap_part = heatmap_part.reshape([b,1,h,w])
+            heatmap_fuse.append(heatmap_part)
+        heatmap_fuse = torch.cat(heatmap_fuse, dim = 1) # shape: b,len(self.parts_id),24,8
+        feats_att_weight = torch.einsum('bchw,bphw->bpchw', feats_att, heatmap_fuse)
+        b,p,c,h,w = feats_att_weight.shape
+        feats_att_weight = feats_att_weight.reshape([b,p*c,h,w])
+        feats_att_weight = self.max_pool(feats_att_weight)
+        feats_att_weight = feats_att_weight.squeeze()   #shape: b, p*c
+        feats_parts = feats_att_weight.reshape([b,p,c])
+        feats_parts = feats_parts.float()
+        if self.training:
+            score1 = self.classify_1(feats_parts[:,0])
+            score2 = self.classify_2(feats_parts[:, 1])
+            score3 = self.classify_3(feats_parts[:, 2])
+            return [score1, score2, score3], [feats_parts[:,0],feats_parts[:,1],feats_parts[:,2]]
+        else:
+            return feats_parts
+
+
+
+
+
 
 def weights_init_classifier(m):
     classname = m.__class__.__name__
