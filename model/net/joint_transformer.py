@@ -371,6 +371,11 @@ class JointFromerV0_6(nn.Module):
             torch.tensor([1, 2, 3, 4, 5, 6, 7, 8, 11]),  # upper body
             torch.tensor([8, 9, 10, 11, 12, 13])  # lower body
         ]
+        feature_dim = 1024
+        self.ffn = nn.Sequential(
+            torch.nn.Linear(self.in_planes * 3, feature_dim)
+        )
+        self.classify_cls = torch.nn.Linear(self.in_planes, num_classes)
         self.classify_1 = torch.nn.Linear(self.in_planes, num_classes)
         self.classify_2 = torch.nn.Linear(self.in_planes, num_classes)
         self.classify_3 = torch.nn.Linear(self.in_planes, num_classes)
@@ -412,14 +417,18 @@ class JointFromerV0_6(nn.Module):
         feats_att_weight = self.max_pool(feats_att_weight)
         feats_att_weight = feats_att_weight.squeeze()   #shape: b, p*c
         feats_parts = feats_att_weight.reshape([b,p,c])
-        feats_parts = feats_parts.float()
+        feats_parts = feats_parts.float()   #feats_parts shape: b, p, c
         if self.training:
+            score = self.classify_cls(feats_att_cls)
             score1 = self.classify_1(feats_parts[:,0])
             score2 = self.classify_2(feats_parts[:, 1])
             score3 = self.classify_3(feats_parts[:, 2])
-            return [score1, score2, score3], [feats_parts[:,0],feats_parts[:,1],feats_parts[:,2]]
+            return [score, score1, score2, score3], [feats_att_cls, feats_parts[:,0],feats_parts[:,1],feats_parts[:,2]]
+            # feat = feats_parts.reshape([b, -1])
+            # score = self.classify(feat)
+            # return score, feat
         else:
-            return feats_parts.reshape([b,-1])
+            return torch.cat([feats_att_cls, feats_parts[:,0],feats_parts[:,1],feats_parts[:,2]], dim = 1)
 
 
 

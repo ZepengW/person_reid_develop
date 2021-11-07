@@ -1,6 +1,6 @@
 mode: train
-task-name: JointFormerV0.6-duke-pretrained
-gpu: [0]
+task-name: JointFormerV0.6.2-duke
+gpu: [1]
 
 
 model-manager:
@@ -11,6 +11,7 @@ model-manager:
     pretrained: True
   network_inputs: ['img','heatmap'] # the data dict keys which the network input
   epoch: 120
+  #load_path: True
   solver:
     optimizer: Adam
     base_lr: 0.0001
@@ -21,15 +22,15 @@ model-manager:
     warmup_epochs: 5
     max_epoch: 120
   loss:
-    use_loss: [cross_entropy]    # loss used for backward
+    use_loss: [cross_entropy, triplet]    # loss used for backward
     triplet:
-      weight: 0.01
-      #list_weight: [1, 0, 0]
+      weight: 1
+      list_weight: [1, 0.1, 0.1, 0.1]
     cross_entropy:
-      weight: 0.995
-      list_weight: [1, 1, 0.5, 0.2, 0.2] # for output score is list
+      weight: 1
+      list_weight: [1, 0.1, 0.1, 0.1] # for output score is list
     wrt:    # loss wrt params
-      weight: 0.001     # loss weight in total loss
+      weight: 1     # loss weight in total loss
       except_input: 'feature'     # except input tensor type
     xent_label_smooth:     # loss xent_label_smooth params
       weight: 1.0
@@ -44,7 +45,7 @@ dataset:
     - 384
     - 128
   num_workers: 8
-  batch_size_train: 4
+  batch_size_train: 64
   batch_size_test: 128
   type: image
 
