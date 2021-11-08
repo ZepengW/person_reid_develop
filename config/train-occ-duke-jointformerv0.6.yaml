@@ -1,17 +1,17 @@
 mode: train
-task-name: JointFormer-PCB-duke-pretrained-pcb_vit_part
+task-name: JointFormerV0.6.2-occ-duke
 gpu: [0]
 
 
 model-manager:
-  network_name: jointformer_pcb # the network model
-  save_name: jointformer_pcb
+  network_name: jointformerv0.6 # the network model
+  save_name: jointformerv0_6-occ
   network-params: # the params used to create model
     vit_pretrained_path: ./pretrained/jx_vit_base_p16_224-80ecf9dd.pth
     pretrained: True
-    feature_mode: pcb_vit_part
   network_inputs: ['img','heatmap'] # the data dict keys which the network input
-  epoch: 512
+  epoch: 256
+  load_path: False
   solver:
     optimizer: Adam
     base_lr: 0.0001
@@ -20,19 +20,18 @@ model-manager:
     weight_decay: 0.0001
     weight_decay_bias: 0.0001
     warmup_epochs: 5
-    max_epoch: 512
+    max_epoch: 256
   loss:
-    use_loss: [cross_entropy, wrt]    # loss used for backward
+    use_loss: [cross_entropy, triplet]    # loss used for backward
     triplet:
-      weight: 0.01
-      #list_weight: [1, 0, 0]
+      weight: 1
+      list_weight: [1, 0.1, 0.1, 0.1]
     cross_entropy:
       weight: 1
-      list_weight: [1, 1, 0.5, 0.2, 0.2] # for output score is list
+      list_weight: [1, 0.1, 0.1, 0.1] # for output score is list
     wrt:    # loss wrt params
       weight: 1     # loss weight in total loss
       except_input: 'feature'     # except input tensor type
-      list_weight: [1, 1, 0.5, 0.2, 0.2]
     xent_label_smooth:     # loss xent_label_smooth params
       weight: 1.0
       params_initial: ['num_classes']     # params used for initialize the loss object
@@ -41,7 +40,7 @@ model-manager:
 
 dataset:
   dataset_name: duke
-  dataset_path: ../dataset/DukeMTMC-reID
+  dataset_path: ../dataset/Occluded-DukeMTMC
   image_size:
     - 384
     - 128
