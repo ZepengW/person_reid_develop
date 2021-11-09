@@ -5,7 +5,7 @@ from model.net.backbones.pcb import OSBlock, Pose_Subnet, PCB_Feature
 from model.net.backbones.vit_pytorch import TransReID
 import copy
 import torch
-
+import logging
 
 class JointFromer(nn.Module):
     '''
@@ -346,9 +346,9 @@ class JointFromerV0_6(nn.Module):
 
     '''
 
-    def __init__(self, num_classes, vit_pretrained_path=None, parts=18, in_planes=768, pretrained=True, **kwargs):
+    def __init__(self, num_classes, vit_pretrained_path=None, in_planes=768, pretrained=True, parts_mode = 3, **kwargs):
         super(JointFromerV0_6, self).__init__()
-        self.parts = parts
+        self.parts_mode = parts_mode
         self.num_classes = num_classes
         self.in_planes = in_planes
         # extract feature
@@ -366,19 +366,33 @@ class JointFromerV0_6(nn.Module):
 
         # body part id
         self.fuse_heatmap = torch.nn.AdaptiveMaxPool1d(1)
-        self.parts_id = [
-            torch.tensor([0, 14, 15, 16, 17]),  # head
-            torch.tensor([1, 2, 3, 4, 5, 6, 7, 8, 11]),  # upper body
-            torch.tensor([8, 9, 10, 11, 12, 13])  # lower body
-        ]
+        if self.parts_mode == 3:
+            self.parts_id = [
+                torch.tensor([0, 14, 15, 16, 17]),  # head
+                torch.tensor([1, 2, 3, 4, 5, 6, 7, 8, 11]),  # upper body
+                torch.tensor([8, 9, 10, 11, 12, 13])  # lower body
+            ]
+        elif self.parts_mode == 6:
+            self.parts_id = [
+                torch.tensor([0, 14, 15, 16, 17]),  # head
+                torch.tensor([1, 2, 5, 8, 11]),   # upper body
+                torch.tensor([2, 3, 4]),    # right arm
+                torch.tensor([5, 6, 7]),    # left arm
+                torch.tensor([8, 9, 10]),   # right leg
+                torch.tensor([11, 12, 13])  # left leg
+            ]
+        else:
+            logging.error(f'Unsupport Parts Mode:{self.parts_mode}')
+            return
         feature_dim = 1024
         self.ffn = nn.Sequential(
             torch.nn.Linear(self.in_planes * 3, feature_dim)
         )
         self.classify_cls = torch.nn.Linear(self.in_planes, num_classes)
-        self.classify_1 = torch.nn.Linear(self.in_planes, num_classes)
-        self.classify_2 = torch.nn.Linear(self.in_planes, num_classes)
-        self.classify_3 = torch.nn.Linear(self.in_planes, num_classes)
+        self.classify_parts = []
+        for i in range(self.parts_mode):
+            self.classify_parts.append(torch.nn.Linear(self.in_planes, num_classes))
+        self.classify_parts = nn.ModuleList(self.classify_parts)
 
     def forward(self, img, heatmap):
         B = img.shape[0]
@@ -418,17 +432,15 @@ class JointFromerV0_6(nn.Module):
         feats_att_weight = feats_att_weight.squeeze()   #shape: b, p*c
         feats_parts = feats_att_weight.reshape([b,p,c])
         feats_parts = feats_parts.float()   #feats_parts shape: b, p, c
+        feats_parts_list = [feats_parts[:, j] for j in range(self.parts_mode)]
         if self.training:
             score = self.classify_cls(feats_att_cls)
-            score1 = self.classify_1(feats_parts[:,0])
-            score2 = self.classify_2(feats_parts[:, 1])
-            score3 = self.classify_3(feats_parts[:, 2])
-            return [score, score1, score2, score3], [feats_att_cls, feats_parts[:,0],feats_parts[:,1],feats_parts[:,2]]
-            # feat = feats_parts.reshape([b, -1])
-            # score = self.classify(feat)
-            # return score, feat
+            score_parts = []
+            for j, classify in enumerate(self.classify_parts):
+                score_parts.append(classify(feats_parts_list[j]))
+            return [score] + score_parts, [feats_att_cls] + feats_parts_list
         else:
-            return torch.cat([feats_att_cls, feats_parts[:,0],feats_parts[:,1],feats_parts[:,2]], dim = 1)
+            return torch.cat([feats_att_cls] + feats_parts_list, dim = 1)
 
 
 

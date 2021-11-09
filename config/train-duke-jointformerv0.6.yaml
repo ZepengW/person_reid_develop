@@ -1,6 +1,6 @@
 mode: train
 task-name: JointFormerV0.6.2-duke
-gpu: [1]
+gpu: [0]
 
 
 model-manager:
@@ -9,6 +9,7 @@ model-manager:
   network-params: # the params used to create model
     vit_pretrained_path: ./pretrained/jx_vit_base_p16_224-80ecf9dd.pth
     pretrained: True
+    parts_mode: 6
   network_inputs: ['img','heatmap'] # the data dict keys which the network input
   epoch: 120
   #load_path: True
@@ -48,5 +49,6 @@ dataset:
   batch_size_train: 64
   batch_size_test: 128
   type: image
+  num_instance: 4
 
 
