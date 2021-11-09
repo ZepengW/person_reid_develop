@@ -79,7 +79,6 @@ def make_loss(loss_cfg: dict, **params):
                     loss_value_l.append(float(loss_value.cpu()))
                     loss_name.append(loss_name_l[i])
             if torch.isinf(loss_value) or torch.isnan(loss_value):
-                logging.warning(f'Exist Inf/nan Loss')
                 continue
             total_loss += loss_weight_l[i] * loss_value
         return total_loss, loss_value_l, loss_name
