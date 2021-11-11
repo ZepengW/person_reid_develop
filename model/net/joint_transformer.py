@@ -381,6 +381,8 @@ class JointFromerV0_6(nn.Module):
                 torch.tensor([8, 9, 10]),   # right leg
                 torch.tensor([11, 12, 13])  # left leg
             ]
+        elif self.parts_mode == 0:
+            self.parts_id = []
         else:
             logging.error(f'Unsupport Parts Mode:{self.parts_mode}')
             return
@@ -424,15 +426,19 @@ class JointFromerV0_6(nn.Module):
             heatmap_part = heatmap_part.squeeze() # shape: b,h*w
             heatmap_part = heatmap_part.reshape([b,1,h,w])
             heatmap_fuse.append(heatmap_part)
-        heatmap_fuse = torch.cat(heatmap_fuse, dim = 1) # shape: b,len(self.parts_id),24,8
-        feats_att_weight = torch.einsum('bchw,bphw->bpchw', feats_att, heatmap_fuse)
-        b,p,c,h,w = feats_att_weight.shape
-        feats_att_weight = feats_att_weight.reshape([b,p*c,h,w])
-        feats_att_weight = self.max_pool(feats_att_weight)
-        feats_att_weight = feats_att_weight.squeeze()   #shape: b, p*c
-        feats_parts = feats_att_weight.reshape([b,p,c])
-        feats_parts = feats_parts.float()   #feats_parts shape: b, p, c
-        feats_parts_list = [feats_parts[:, j] for j in range(self.parts_mode)]
+        if self.parts_mode > 0:
+            # only use cls token
+            heatmap_fuse = torch.cat(heatmap_fuse, dim = 1) # shape: b,len(self.parts_id),24,8
+            feats_att_weight = torch.einsum('bchw,bphw->bpchw', feats_att, heatmap_fuse)
+            b,p,c,h,w = feats_att_weight.shape
+            feats_att_weight = feats_att_weight.reshape([b,p*c,h,w])
+            feats_att_weight = self.max_pool(feats_att_weight)
+            feats_att_weight = feats_att_weight.squeeze()   #shape: b, p*c
+            feats_parts = feats_att_weight.reshape([b,p,c])
+            feats_parts = feats_parts.float()   #feats_parts shape: b, p, c
+            feats_parts_list = [feats_parts[:, j] for j in range(self.parts_mode)]
+        else:
+            feats_parts_list = []
         if self.training:
             score = self.classify_cls(feats_att_cls)
             score_parts = []
