@@ -188,6 +188,8 @@ class JointFromerPCB(nn.Module):
             self.classify_upper = nn.Linear(self.in_planes, self.num_classes, bias=False)
             self.classify_lower = nn.Linear(self.in_planes, self.num_classes, bias=False)
             self.classify_fuse = nn.Linear(self.in_planes * 4, self.num_classes, bias=False)
+        elif self.feature_mode == 'vit_cls':
+            self.classify_whole = nn.Linear(self.in_planes, self.num_classes, bias=False)
 
     def forward(self, img, heatmap):
         B = img.shape[0]
@@ -214,6 +216,8 @@ class JointFromerPCB(nn.Module):
             return self.get_vit_part(feats)
         elif self.feature_mode == 'vit_parts':
             return self.get_vit_parts(feats)
+        elif self.feature_mode == 'vit_cls':
+            return self.get_vit_cls(feats)
 
 
     def get_whole_vit_part(self, feats_global, feats):
@@ -297,6 +301,16 @@ class JointFromerPCB(nn.Module):
                    [feats_fus, feats_whole, feats_local_head,feats_local_upper,feats_local_lower]
         else:
             return feats_fus
+    
+    def get_vit_cls(self, feats):
+        feats_whole = feats[:, 0]
+        feats_whole = self.bottleneck_whole(feats_whole)
+        if self.training:
+            score_cls = self.classify_whole(feats_whole)
+            return score_cls, feats_whole
+        else:
+            return feats_whole
+
 
 
 class OnlyPCB(nn.Module):
