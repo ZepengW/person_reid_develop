@@ -1,5 +1,5 @@
 mode: train
-task-name: JointFormer-PCB-duke-pretrained-pcb_vit_part
+task-name: JointFormer-PCB-duke-pretrained-vit_cls
 gpu: [0]
 
 
