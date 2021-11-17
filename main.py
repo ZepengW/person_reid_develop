@@ -10,9 +10,9 @@ from torch.utils.data import DataLoader
 import yaml
 import numpy as np
 import random
-from tensorboardX import SummaryWriter
+from torch.utils.tensorboard import SummaryWriter
 from dataset.sampler import RandomIdentitySampler
-
+import tools
 
 
 def set_seed(seed):
@@ -220,9 +220,13 @@ if __name__ == '__main__':
     log_dir_name = init_logging(task_name=yaml_cfg.get('task-name', ''))
     # initial tensorboardX
     writer_tensorboardx = SummaryWriter(f'./output/log/{log_dir_name}')
+    yaml_str = str(tools.format_dict(yaml_cfg))
 
-    logging.info(str(yaml_cfg))
-
+    logging.info('=> Config File:')
+    logging.info(yaml_str)
+    # for html display convert
+    yaml_str = yaml_str.replace('\n', '<br>')
+    yaml_str = yaml_str.replace(' ', "&nbsp;")
+    writer_tensorboardx.add_text('config', yaml_str)
     main(yaml_cfg, writer_tensorboardx)
-
     writer_tensorboardx.close()
