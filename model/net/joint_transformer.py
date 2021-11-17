@@ -463,6 +463,204 @@ class JointFromerV0_6(nn.Module):
             return torch.cat([feats_att_cls] + feats_parts_list, dim = 1)
 
 
+class JointFromerPCBv2(nn.Module):
+    '''
+    Joint Transformer using PCB to generate feature map
+    compare to v1
+    v2.1
+        for heatmap whose shape is 18, h, w
+        extract feature patch(dim = in_planes),
+            which responds to the position of the maximum value of each channel(18) of the heatmap
+    v2.2
+        # (not finish) and for all zero channel, use random feature patch
+    '''
+
+    def __init__(self, num_classes, vit_pretrained_path=None, parts=18, in_planes=768, feature_mode='pcb_vit_part',
+                 pretrained=True, **kwargs):
+        super(JointFromerPCBv2, self).__init__()
+        self.parts = parts
+        self.num_classes = num_classes
+        self.in_planes = in_planes
+        # extract feature
+        self.feature_map_extract = PCB_Feature(block=Bottleneck, layers=[3, 4, 6, 3], pretrained=pretrained)
+        # patch embeding
+        self.downsample_global = nn.Conv2d(2048, 1024, kernel_size=1)
+        self.downsample = nn.Conv2d(2048, in_planes, kernel_size=1)
+        # self.proj = torch.nn.AdaptiveAvgPool2d((1,1))
+        self.proj = torch.nn.AdaptiveMaxPool2d((1, 1))
+        # vit backbone network
+        self.transformer = TransReID(num_classes=num_classes, num_patches=parts, embed_dim=self.in_planes, depth=12,
+                                     num_heads=12, mlp_ratio=4, qkv_bias=True)
+        if not vit_pretrained_path is None:
+            self.transformer.load_param(vit_pretrained_path)
+        # bottleneck
+        self.bottleneck = nn.BatchNorm1d(1024)
+        self.bottleneck.bias.requires_grad_(False)
+        self.bottleneck.apply(weights_init_kaiming)
+        self.bottleneck_whole = nn.BatchNorm1d(self.in_planes)
+        self.bottleneck_whole.bias.requires_grad_(False)
+        self.bottleneck_whole.apply(weights_init_kaiming)
+        self.bottleneck_part = nn.BatchNorm1d(self.in_planes)
+        self.bottleneck_part.bias.requires_grad_(False)
+        self.bottleneck_part.apply(weights_init_kaiming)
+        # feature fusion
+        self.feat_fuse = torch.nn.AdaptiveMaxPool1d(1)
+        # classify layer
+        self.feature_mode = feature_mode
+        # body part id
+        self.parts_id = [
+            torch.tensor([0, 14, 15, 16, 17]) + 1,  # head
+            torch.tensor([1, 2, 3, 4, 5, 6, 7, 8, 11]) + 1,  # upper body
+            torch.tensor([8, 9, 10, 11, 12, 13]) + 1  # lower body
+        ]
+
+        if self.feature_mode == 'pcb_vit_part':
+            self.classify = nn.Linear(2 * self.in_planes + 1024, self.num_classes, bias=False)
+        elif self.feature_mode == 'vit_part':
+            self.classify = nn.Linear(2 * self.in_planes, self.num_classes, bias=False)
+        elif self.feature_mode == 'vit_parts':
+            self.bottleneck_head = nn.BatchNorm1d(self.in_planes)
+            self.bottleneck_head.bias.requires_grad_(False)
+            self.bottleneck_head.apply(weights_init_kaiming)
+            self.bottleneck_upper = nn.BatchNorm1d(self.in_planes)
+            self.bottleneck_upper.bias.requires_grad_(False)
+            self.bottleneck_upper.apply(weights_init_kaiming)
+            self.bottleneck_lower = nn.BatchNorm1d(self.in_planes)
+            self.bottleneck_lower.bias.requires_grad_(False)
+            self.bottleneck_lower.apply(weights_init_kaiming)
+
+            # feature fusion
+            self.feat_fuse = torch.nn.AdaptiveMaxPool1d(1)
+            # classify layer
+            self.classify_whole = nn.Linear(self.in_planes, self.num_classes, bias=False)
+            self.classify_head = nn.Linear(self.in_planes, self.num_classes, bias=False)
+            self.classify_upper = nn.Linear(self.in_planes, self.num_classes, bias=False)
+            self.classify_lower = nn.Linear(self.in_planes, self.num_classes, bias=False)
+            self.classify_fuse = nn.Linear(self.in_planes * 4, self.num_classes, bias=False)
+        elif self.feature_mode == 'vit_cls':
+            self.classify_whole = nn.Linear(self.in_planes, self.num_classes, bias=False)
+
+    def forward(self, img, heatmap):
+        B = img.shape[0]
+        P = heatmap.shape[1]
+        # extract feature
+        feat_map = self.feature_map_extract(img)
+        feats_global = self.proj(feat_map)  # (b, 2048, 1, 1)
+        feats_global = self.downsample_global(feats_global)
+        feats_global = feats_global.squeeze()
+
+        # generate patch
+        feat_map = self.downsample(feat_map)
+        heatmap = torch.reshape(heatmap,[heatmap.shape[0], heatmap.shape[1], -1]) # heatmap's shape : b, 18, fh*fw
+        heatmap_index = torch.argmax(heatmap, dim=2)   # heatmap_index's shape : b, 18
+        feat_map = torch.reshape(feat_map,[feat_map.shape[0], feat_map.shape[1], -1]) #feat map's shape : b, c, fh*fw
+        feat_map = feat_map.permute([0, 2, 1])  #feat map's shape : b, fh*fw, c
+        feat_patch = []
+        for b_i in range(B):
+            feat_patch.append(feat_map[b_i,heatmap_index[b_i]].unsqueeze(dim=0))
+        feat_patch = torch.cat(feat_patch, dim = 0)
+        # transformer
+        feats = self.transformer(feat_patch)
+
+        if self.feature_mode == 'pcb_vit_part':
+            return self.get_whole_vit_part(feats_global, feats)
+        elif self.feature_mode == 'vit_part':
+            return self.get_vit_part(feats)
+        elif self.feature_mode == 'vit_parts':
+            return self.get_vit_parts(feats)
+        elif self.feature_mode == 'vit_cls':
+            return self.get_vit_cls(feats)
+
+    def get_whole_vit_part(self, feats_global, feats):
+        # bottleneck
+        feats_global = self.bottleneck(feats_global)
+        feats_whole_vit = feats[:, 0]
+        feats_whole_vit = self.bottleneck_whole(feats_whole_vit)
+        feats_part_vit = feats[:, 1:]
+        feats_part_vit = feats_part_vit.permute([0, 2, 1])
+        feats_part_vit = self.feat_fuse(feats_part_vit)
+        feats_part_vit = feats_part_vit.squeeze()
+        feats_part_vit = self.bottleneck_part(feats_part_vit)
+        feats = torch.cat([feats_global, feats_whole_vit, feats_part_vit], dim=1)
+        # output
+        if self.training:
+            score = self.classify(feats)
+            return score, feats
+        else:
+            return feats
+
+    def get_vit_part(self, feats):
+        '''
+        fuse 1~18 body parts patches feature to vit_feature_local, and cat [vit_feature_global,vit_feature_local]
+        :param feats:
+        :return:
+        '''
+        # bottleneck
+        feats_whole_vit = feats[:, 0]
+        feats_whole_vit = self.bottleneck_whole(feats_whole_vit)
+        feats_part_vit = feats[:, 1:]
+        feats_part_vit = feats_part_vit.permute([0, 2, 1])
+        feats_part_vit = self.feat_fuse(feats_part_vit)
+        feats_part_vit = feats_part_vit.squeeze()
+        feats_part_vit = self.bottleneck_part(feats_part_vit)
+        feats = torch.cat([feats_whole_vit, feats_part_vit], dim=1)
+        # output
+        if self.training:
+            score = self.classify(feats)
+            return score, feats
+        else:
+            return feats
+
+    def get_vit_parts(self, feats):
+        '''
+        fuse 1~18 body parts patches feature to vit_feat_head, vit_feat_upper, vit_feat_lower respectively.
+        :param feats:
+        :return:
+        '''
+        feats_whole = feats[:, 0]
+        # head feature
+        vit_feat_head = feats[:, self.parts_id[0]]
+        vit_feat_head = vit_feat_head.permute([0, 2, 1])
+        vit_feat_head = self.feat_fuse(vit_feat_head)
+        vit_feat_head = vit_feat_head.squeeze()
+        # upper body feature
+        vit_feat_upper = feats[:, self.parts_id[1]]
+        vit_feat_upper = vit_feat_upper.permute([0, 2, 1])
+        vit_feat_upper = self.feat_fuse(vit_feat_upper)
+        vit_feat_upper = vit_feat_upper.squeeze()
+        # lower body feature
+        vit_feat_lower = feats[:, self.parts_id[2]]
+        vit_feat_lower = vit_feat_lower.permute([0, 2, 1])
+        vit_feat_lower = self.feat_fuse(vit_feat_lower)
+        vit_feat_lower = vit_feat_lower.squeeze()
+        # bottleneck
+        feats_whole = self.bottleneck_whole(feats_whole)
+        feats_local_head = self.bottleneck_head(vit_feat_head)
+        feats_local_upper = self.bottleneck_upper(vit_feat_upper)
+        feats_local_lower = self.bottleneck_lower(vit_feat_lower)
+        # feature fuse
+        feats_fus = torch.cat([feats_whole, feats_local_head / 3, feats_local_upper / 3, feats_local_lower / 3], dim=1)
+        # output
+        if self.training:
+            score_fuse = self.classify_fuse(feats_fus)
+            score_whole = self.classify_whole(feats_whole)
+            score_head = self.classify_head(feats_local_head)
+            score_upper = self.classify_upper(feats_local_upper)
+            score_lower = self.classify_lower(feats_local_lower)
+
+            return [score_fuse, score_whole, score_head, score_upper, score_lower], \
+                   [feats_fus, feats_whole, feats_local_head, feats_local_upper, feats_local_lower]
+        else:
+            return feats_fus
+
+    def get_vit_cls(self, feats):
+        feats_whole = feats[:, 0]
+        feats_whole = self.bottleneck_whole(feats_whole)
+        if self.training:
+            score_cls = self.classify_whole(feats_whole)
+            return score_cls, feats_whole
+        else:
+            return feats_whole
 
 
 
