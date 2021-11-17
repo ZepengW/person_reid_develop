@@ -1,5 +1,5 @@
 mode: train
-task-name: JointFormer-PCB-duke-vit_cls
+task-name: JointFormer-PCB-MSMT17-vit_cls
 gpu: [1]
 
 
