@@ -9,9 +9,9 @@ class MSMT17(object):
         train_dir = os.path.join(self.dataset_dir,'bounding_box_train')
         test_dir = os.path.join(self.dataset_dir,'bounding_box_test')
         query_dir = os.path.join(self.dataset_dir,'query')
-        train_heatmap_dir = os.path.join(self.dataset_dir,'bounding_box_train_op_hm')
-        test_heatmap_dir = os.path.join(self.dataset_dir,'bounding_box_test_op_hm')
-        query_heatmap_dir = os.path.join(self.dataset_dir,'query_op_hm')
+        train_heatmap_dir = os.path.join(self.dataset_dir,'train-alphapose-result/heatmap')
+        test_heatmap_dir = os.path.join(self.dataset_dir,'test-alphapose-result/heatmap')
+        query_heatmap_dir = os.path.join(self.dataset_dir,'query-alphapose-result/heatmap')
 
         train_list, num_train_pids, num_train_imgs = self._process_data(train_dir,relabel=True,hm_dir=train_heatmap_dir)
         test_list, num_test_pids, num_test_imgs = self._process_data(test_dir,hm_dir=test_heatmap_dir)
@@ -45,7 +45,7 @@ class MSMT17(object):
             pid = int(file.split('_')[0])
             cid = int((file.split('c')[1]).split('_')[0]) - 1
             clothes_id = -1
-            hm_path = os.path.join(hm_dir,os.path.splitext(file)[0]+'_pose_heatmaps.png')
+            hm_path = os.path.join(hm_dir,os.path.splitext(file)[0]+'.npy')
             train_list.append((img_path,pid,cid,clothes_id,hm_path))
             id_set.add(pid)
         # relabel id to continues
