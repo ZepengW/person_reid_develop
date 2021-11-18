@@ -472,7 +472,7 @@ class JointFromerPCBv2(nn.Module):
         extract feature patch(dim = in_planes),
             which responds to the position of the maximum value of each channel(18) of the heatmap
     v2.2
-        # (not finish) and for all zero channel, use random feature patch
+        for all zero channel, use random feature patch
     '''
 
     def __init__(self, num_classes, vit_pretrained_path=None, parts=18, in_planes=768, feature_mode='pcb_vit_part',
@@ -559,6 +559,9 @@ class JointFromerPCBv2(nn.Module):
         for b_i in range(B):
             feat_patch.append(feat_map[b_i,heatmap_index[b_i]].unsqueeze(dim=0))
         feat_patch = torch.cat(feat_patch, dim = 0)
+        noise = torch.randn_like(feat_patch)
+        heatmap = torch.sum(heatmap, dim = 2).unsqueeze(dim=2).repeat(1,1,self.in_planes)
+        feat_patch = torch.where(heatmap == 0, noise, feat_patch)
         # transformer
         feats = self.transformer(feat_patch)
 
