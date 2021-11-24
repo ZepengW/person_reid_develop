@@ -248,7 +248,7 @@ class ModelManager:
                 pids_l = gPids.tolist() + qPids.tolist()
                 features_test, pids_arr = self.filter_feature(features_test,pids_l,self.vis_pid_test)
                 if not None == pids_arr:
-                    self.writer.add_embedding(features_test, metadata=pids_arr.tolist, global_step=epoch, tag='test')
+                    self.writer.add_embedding(features_test, metadata=pids_arr.tolist(), global_step=epoch, tag='test')
         logging.info("[Test Finish]".center(80,'='))
 
     def filter_feature(self, features:torch.Tensor, pids_l:list, vis_pid):
