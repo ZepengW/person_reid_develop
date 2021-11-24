@@ -1,7 +1,6 @@
-mode: test
-task-name: JointFormer-PCBv2.3-duke-pcb_vit_part
-gpu: [0]
-vis: True       # visualize feature distribution
+mode: train
+task-name: JointFormer-PCBv2.3-occduke-pcb_vit_part
+gpu: [1]
 
 
 model-manager:
@@ -12,7 +11,7 @@ model-manager:
     pretrained: True
     feature_mode: pcb_vit_part
   network_inputs: ['img','heatmap'] # the data dict keys which the network input
-  epoch: 300
+  epoch: 500
   solver:
     optimizer: Adam
     base_lr: 0.0001
@@ -20,8 +19,8 @@ model-manager:
     cosine_mergin: 0.5
     weight_decay: 0.0001
     weight_decay_bias: 0.0001
-    warmup_epochs: 50
-    max_epoch: 300
+    warmup_epochs: 30
+    max_epoch: 500
   loss:
     use_loss: [cross_entropy, triplet]    # loss used for backward
     triplet:
@@ -43,7 +42,7 @@ model-manager:
 
 dataset:
   dataset_name: duke
-  dataset_path: ../dataset/DukeMTMC-reID
+  dataset_path: ../dataset/Occluded-DukeMTMC
   image_size:
     - 384
     - 128
