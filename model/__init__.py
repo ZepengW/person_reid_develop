@@ -11,6 +11,7 @@ from model.model_factory import make_model
 from tensorboardX import SummaryWriter
 import solver
 from loss import make_loss
+import random
 
 
 
@@ -58,6 +59,8 @@ class ModelManager:
         self.re_ranking = cfg.get('re_ranking', True)
         #tensorboardX
         self.writer = writer
+        self.vis_pid_train = cfg.get('vis_pid_train', 100)
+        self.vis_pid_test = cfg.get('vis_pid_test', 100)
 
 
     @staticmethod
@@ -139,8 +142,8 @@ class ModelManager:
             if is_vis:
                 if isinstance(feat,list):
                     feat = feat[0]
-                f = PCA_svd(feat, 3)
-                features_vis = features_vis + f.tolist()
+                #f = PCA_svd(feat, 3)
+                features_vis.append(feat.cpu())
 
         #loging the loss
         total_loss_avg = np.mean(np.array(total_loss_l))
@@ -153,7 +156,10 @@ class ModelManager:
             for i, name in enumerate(loss_name):
                 self.writer.add_scalar(f'train/{name}', loss_avg[i], epoch)
             if is_vis:
-                self.writer.add_embedding(features_vis, metadata=pids_l, global_step=epoch, tag='train')
+                # fliter pids
+                features_vis = torch.cat(features_vis)
+                features_vis, pids_arr = self.filter_feature(features_vis,pids_l,self.vis_pid_train)
+                self.writer.add_embedding(features_vis, metadata=pids_arr.tolist(), global_step=epoch, tag='train')
         self.save_model(self.net, self.model_name, epoch)
         logging.info("Train Finish")
 
@@ -238,10 +244,33 @@ class ModelManager:
             #     self.writer.add_scalar(f'test-changing/cmc/e{epoch}', p, i)
             # feature visualization
             if is_vis:
-                features_test = torch.cat([gf, qf])
-                labels = gPids.tolist() + qPids.tolist()
-                self.writer.add_embedding(features_test, metadata=labels, global_step=epoch, tag='test')
+                features_test = torch.cat([gf.cpu(), qf.cpu()])
+                pids_l = gPids.tolist() + qPids.tolist()
+                features_test, pids_arr = self.filter_feature(features_test,pids_l,self.vis_pid_test)
+                if not None == pids_arr:
+                    self.writer.add_embedding(features_test, metadata=pids_arr.tolist, global_step=epoch, tag='test')
         logging.info("[Test Finish]".center(80,'='))
+
+    def filter_feature(self, features:torch.Tensor, pids_l:list, vis_pid):
+        # fliter pids
+        if isinstance(self.vis_pid_test, int):
+            pids_enum = list(set(pids_l))
+            if (self.vis_pid_test < 0) or (self.vis_pid_test > len(pids_enum)):
+                vis_pid_list = pids_enum
+            else:
+                vis_pid_list = random.sample(list(set(pids_l)), self.vis_pid_test)
+        elif isinstance(self.vis_pid_test, list):
+            vis_pid_list = self.vis_pid_test
+        else:
+            logging.error('vis_pid_train Only Supports: {INT, LIST}')
+            return None, None
+        # get index of select pids
+        pids_arr = torch.tensor(pids_l)
+        vis_pid_arr = torch.tensor(vis_pid_list)
+        index = torch.where(pids_arr == vis_pid_arr[:, None])[-1]
+        features_vis = features[index]
+        pids_arr = pids_arr[index]
+        return features_vis, pids_arr
 
 def PCA_svd(X, k, center=True):
     n = X.size()[0]
