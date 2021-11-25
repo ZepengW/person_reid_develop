@@ -33,6 +33,12 @@ model-manager:
     cross_entropy:
       weight: 1.0
       except_input: 'score'       # except input tensor type
+  # use for visulize feature distribution
+  # vis_pid_[test/train] can be int or list
+  # int: random select [vis_pid_train/test] pids' samples for visualization
+  # list: select pids' samples which in [vis_pid_train/test] list for visualization
+  vis_pid_train: 30
+  vis_pid_test: 30
 
 dataset:
   dataset_name: duke
