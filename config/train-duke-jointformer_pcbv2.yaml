@@ -1,28 +1,28 @@
-mode: test
-task-name: test-JointFormer-PCBv2.2-duke-pcb_vit_part
+mode: train
+task-name: JointFormer-PCBv2.2-duke-pcb_vit_part
 gpu: [0]
 vis: True       # visualize feature distribution
-vis_interval: 50
+vis_interval: 100
 
 
 model-manager:
   network_name: jointformer_pcb_v2 # the network model
-  save_name: jointformer_pcb_v2.2_pcb_vit_part
+  save_name: jointformer_pcb_v2.2_pcb_vit_part-2
   network-params: # the params used to create model
     vit_pretrained_path: ./pretrained/jx_vit_base_p16_224-80ecf9dd.pth
     pretrained: True
     feature_mode: pcb_vit_part
   network_inputs: ['img','heatmap'] # the data dict keys which the network input
-  epoch: 300
+  epoch: 200
   solver:
     optimizer: Adam
-    base_lr: 0.0001
+    base_lr: 0.001
     bias_lr_factor: 2
-    cosine_mergin: 0.5
-    weight_decay: 0.0003
-    weight_decay_bias: 0.0001
-    warmup_epochs: 50
-    max_epoch: 300
+    cosine_mergin: 1
+    weight_decay: 0.001
+    weight_decay_bias: 0.001
+    warmup_epochs: 30
+    max_epoch: 200
   loss:
     use_loss: [cross_entropy, triplet]    # loss used for backward
     triplet:
