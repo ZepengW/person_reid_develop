@@ -217,20 +217,22 @@ if __name__ == '__main__':
     if not os.path.isdir('./output/log'):
         os.mkdir('./output/log')
 
+    yaml_str = str(tools.format_dict(yaml_cfg))
+    logging.info('=> Config File:')
+    logging.info(yaml_str)
+
     if not config.no_log:
         # initial logging module
         log_dir_name = init_logging(task_name=yaml_cfg.get('task-name', ''))
         # initial tensorboardX
         writer_tensorboardx = SummaryWriter(f'./output/log/{log_dir_name}')
+        # for html display convert
+        yaml_str = yaml_str.replace('\n', '<br>')
+        yaml_str = yaml_str.replace(' ', "&nbsp;")
+        writer_tensorboardx.add_text('config', yaml_str)
     else:
         writer_tensorboardx = None
-    yaml_str = str(tools.format_dict(yaml_cfg))
 
-    logging.info('=> Config File:')
-    logging.info(yaml_str)
-    # for html display convert
-    yaml_str = yaml_str.replace('\n', '<br>')
-    yaml_str = yaml_str.replace(' ', "&nbsp;")
-    writer_tensorboardx.add_text('config', yaml_str)
     main(yaml_cfg, writer_tensorboardx)
-    writer_tensorboardx.close()
+    if not writer_tensorboardx == None:
+        writer_tensorboardx.close()
