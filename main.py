@@ -128,27 +128,34 @@ def main(config, writer_tensorboardX):
     logging.info("finish!")
 
 
-def init_logging(task_name=''):
+def init_logging(task_name='', is_save = True):
     # log config
-    log_dir_name = str(datetime.datetime.now().year).rjust(4, '0') \
-                   + str(datetime.datetime.now().month).rjust(2, '0') \
-                   + str(datetime.datetime.now().day).rjust(2, '0') \
-                   + str(datetime.datetime.now().hour).rjust(2, '0') \
-                   + str(datetime.datetime.now().minute).rjust(2, '0') \
-                   + str(datetime.datetime.now().second).rjust(2, '0')
-    if task_name != '':
-        log_dir_name = f'{task_name}-{log_dir_name}'
-    if not os.path.isdir(f'./output/log/{log_dir_name}'):
-        os.mkdir(f'./output/log/{log_dir_name}')
-    logging.basicConfig(filename=f'./output/log/{log_dir_name}/log.txt',
-                        level=logging.INFO,
-                        format='###%(levelname)s###[%(asctime)s]%(message)s',
-                        datefmt='%Y-%m-%d %H:%M:%S')
+    log_dir_name = ''
+    if is_save:
+        log_dir_name = str(datetime.datetime.now().year).rjust(4, '0') \
+                       + str(datetime.datetime.now().month).rjust(2, '0') \
+                       + str(datetime.datetime.now().day).rjust(2, '0') \
+                       + str(datetime.datetime.now().hour).rjust(2, '0') \
+                       + str(datetime.datetime.now().minute).rjust(2, '0') \
+                       + str(datetime.datetime.now().second).rjust(2, '0')
+        if task_name != '':
+            log_dir_name = f'{task_name}-{log_dir_name}'
+        if not os.path.isdir(f'./output/log/{log_dir_name}'):
+            os.mkdir(f'./output/log/{log_dir_name}')
+        logging.basicConfig(filename=f'./output/log/{log_dir_name}/log.txt',
+                            level=logging.INFO,
+                            format='###%(levelname)s###[%(asctime)s]%(message)s',
+                            datefmt='%Y-%m-%d %H:%M:%S')
+        print(f'writing log to ./output/log/{log_dir_name}')
+    else:
+        logging.basicConfig(filename=f'./log.txt',
+                            level=logging.INFO,
+                            format='###%(levelname)s###[%(asctime)s]%(message)s',
+                            datefmt='%Y-%m-%d %H:%M:%S')
     console = logging.StreamHandler()
     console.setLevel(logging.INFO)
     console.setFormatter(logging.Formatter('[%(asctime)s]%(message)s', datefmt='%Y-%m-%d %H:%M:%S'))
     logging.getLogger().addHandler(console)
-    print(f'writing log to ./output/log/{log_dir_name}')
     return log_dir_name
 
 def log_dataset_config(dataset_config:dict):
@@ -218,8 +225,7 @@ if __name__ == '__main__':
         os.mkdir('./output/log')
 
     yaml_str = str(tools.format_dict(yaml_cfg))
-    logging.info('=> Config File:')
-    logging.info(yaml_str)
+
 
     if not config.no_log:
         # initial logging module
@@ -227,11 +233,15 @@ if __name__ == '__main__':
         # initial tensorboardX
         writer_tensorboardx = SummaryWriter(f'./output/log/{log_dir_name}')
         # for html display convert
-        yaml_str = yaml_str.replace('\n', '<br>')
-        yaml_str = yaml_str.replace(' ', "&nbsp;")
-        writer_tensorboardx.add_text('config', yaml_str)
+        yaml_str_html = yaml_str.replace('\n', '<br>')
+        yaml_str_html = yaml_str_html.replace(' ', "&nbsp;")
+        writer_tensorboardx.add_text('config', yaml_str_html)
     else:
+        init_logging(task_name=yaml_cfg.get('task-name', ''), is_save=False)
         writer_tensorboardx = None
+
+    logging.info('=> Config File:')
+    logging.info(yaml_str)
 
     main(yaml_cfg, writer_tensorboardx)
     if not writer_tensorboardx == None:
