@@ -192,6 +192,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--cfg_base', type=str, default='config/cfg-base.yaml', help='the config file(.yaml)')
     parser.add_argument('--cfg', type=str, default='config/train-market1501.yaml', help='the config file(.yaml)')
+    parser.add_argument('--no_log', action='store_true', default=False, help='do not save log file')
 
     config = parser.parse_args()
     # base config
@@ -216,10 +217,13 @@ if __name__ == '__main__':
     if not os.path.isdir('./output/log'):
         os.mkdir('./output/log')
 
-    # initial logging module
-    log_dir_name = init_logging(task_name=yaml_cfg.get('task-name', ''))
-    # initial tensorboardX
-    writer_tensorboardx = SummaryWriter(f'./output/log/{log_dir_name}')
+    if not config.no_log:
+        # initial logging module
+        log_dir_name = init_logging(task_name=yaml_cfg.get('task-name', ''))
+        # initial tensorboardX
+        writer_tensorboardx = SummaryWriter(f'./output/log/{log_dir_name}')
+    else:
+        writer_tensorboardx = None
     yaml_str = str(tools.format_dict(yaml_cfg))
 
     logging.info('=> Config File:')
