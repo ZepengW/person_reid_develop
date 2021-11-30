@@ -30,16 +30,19 @@ import logging
 
 def compute_dis_matrix(prob_feat, gal_feat, metric, is_re_ranking=True):
     if metric == 'cosine':
-        dist = cosine_similarity(prob_feat,gal_feat)
+        method_metric = cosine_similarity
     elif metric == 'euclidean':
-        dist = euclidean_distance(prob_feat,gal_feat)
+        method_metric = euclidean_distance
     else:
         logging.error(f'not support [{metric}] metric method')
         return None
+    dist_q_g = method_metric(prob_feat,gal_feat)
     if is_re_ranking:
-        logging.info('Compute Re-Ranking...')
-        dist =  re_ranking(dist,prob_feat.shape[0],k1=20, k2=6, lambda_value=0.3)
-    return dist
+        dist_q_q = method_metric(prob_feat, prob_feat)
+        dist_g_g = method_metric(gal_feat, gal_feat)
+        logging.info('Re-Ranking...')
+        dist_q_g =  re_ranking_optimize(dist_q_g,dist_q_q,dist_g_g,k1=20, k2=6, lambda_value=0.3)
+    return dist_q_g
 
 def euclidean_distance(qf, gf):
     m = qf.shape[0]
@@ -149,8 +152,7 @@ def re_ranking_optimize(q_g_dist, q_q_dist, g_g_dist, k1=20, k2=6, lambda_value=
     original_dist = np.concatenate([
         np.concatenate([q_q_dist, q_g_dist], axis=1),
         np.concatenate([q_g_dist.T, g_g_dist], axis=1)
-    ],
-                                   axis=0)
+    ],axis=0)
     original_dist = np.power(original_dist, 2).astype(np.float32)
     original_dist = np.transpose(1. * original_dist /
                                  np.max(original_dist, axis=0))
