@@ -6,6 +6,7 @@ from model.net.backbones.vit_pytorch import TransReID
 import copy
 import torch
 import logging
+import random
 
 class JointFromer(nn.Module):
     '''
@@ -476,7 +477,7 @@ class JointFromerPCBv2(nn.Module):
     '''
 
     def __init__(self, num_classes, vit_pretrained_path=None, parts=18, in_planes=768, feature_mode='pcb_vit_part',
-                 pretrained=True, **kwargs):
+                 pretrained=True, use_heatmap = True, **kwargs):
         super(JointFromerPCBv2, self).__init__()
         self.parts = parts
         self.num_classes = num_classes
@@ -513,6 +514,8 @@ class JointFromerPCBv2(nn.Module):
             torch.tensor([1, 2, 3, 4, 5, 6, 7, 8, 11]) + 1,  # upper body
             torch.tensor([8, 9, 10, 11, 12, 13]) + 1  # lower body
         ]
+        # verify the vilidation of heatmap
+        self.use_heatmap = use_heatmap
 
         if self.feature_mode == 'pcb_vit_part':
             self.classify = nn.Linear(2 * self.in_planes + 1024, self.num_classes, bias=False)
@@ -548,20 +551,27 @@ class JointFromerPCBv2(nn.Module):
         feats_global = self.proj(feat_map)  # (b, 2048, 1, 1)
         feats_global = self.downsample_global(feats_global)
         feats_global = feats_global.squeeze()
+        feat_map = self.downsample(feat_map)
 
         # generate patch
-        feat_map = self.downsample(feat_map)
-        heatmap = torch.reshape(heatmap,[heatmap.shape[0], heatmap.shape[1], -1]) # heatmap's shape : b, 18, fh*fw
-        heatmap_index = torch.argmax(heatmap, dim=2)   # heatmap_index's shape : b, 18
-        feat_map = torch.reshape(feat_map,[feat_map.shape[0], feat_map.shape[1], -1]) #feat map's shape : b, c, fh*fw
-        feat_map = feat_map.permute([0, 2, 1])  #feat map's shape : b, fh*fw, c
-        feat_patch = []
-        for b_i in range(B):
-            feat_patch.append(feat_map[b_i,heatmap_index[b_i]].unsqueeze(dim=0))
-        feat_patch = torch.cat(feat_patch, dim = 0)
-        noise = torch.randn_like(feat_patch)
-        heatmap = torch.sum(heatmap, dim = 2).unsqueeze(dim=2).repeat(1,1,self.in_planes)
-        feat_patch = torch.where(heatmap == 0, noise, feat_patch)
+        if self.use_heatmap:
+            heatmap = torch.reshape(heatmap,[heatmap.shape[0], heatmap.shape[1], -1]) # heatmap's shape : b, 18, fh*fw
+            heatmap_index = torch.argmax(heatmap, dim=2)   # heatmap_index's shape : b, 18
+            feat_map = torch.reshape(feat_map,[feat_map.shape[0], feat_map.shape[1], -1]) #feat map's shape : b, c, fh*fw
+            feat_map = feat_map.permute([0, 2, 1])  #feat map's shape : b, fh*fw, c
+            feat_patch = []
+            for b_i in range(B):
+                feat_patch.append(feat_map[b_i,heatmap_index[b_i]].unsqueeze(dim=0))
+            feat_patch = torch.cat(feat_patch, dim = 0)
+            noise = torch.randn_like(feat_patch)
+            heatmap = torch.sum(heatmap, dim = 2).unsqueeze(dim=2).repeat(1,1,self.in_planes)
+            feat_patch = torch.where(heatmap == 0, noise, feat_patch)
+        else:
+            # random sample feat_patch
+            feat_map = torch.reshape(feat_map,[feat_map.shape[0], feat_map.shape[1], -1]) #feat map's shape : b, c, fh*fw
+            feat_map = feat_map.permute([0, 2, 1])  #feat map's shape : b, fh*fw, c
+            feat_patch_index = torch.LongTensor(random.sample(range(feat_map.shape[1]), self.parts))
+            feat_patch = feat_map[:,feat_patch_index]
         # transformer
         feats = self.transformer(feat_patch)
 
