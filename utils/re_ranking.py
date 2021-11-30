@@ -25,18 +25,21 @@ Minibatch: avaliable when 'MemorySave' is 'True'
 import numpy as np
 import torch
 from sklearn.metrics import pairwise_distances
+import logging
 
 
 def compute_dis_matrix(prob_feat, gal_feat, metric, is_re_ranking=True):
-    if is_re_ranking:
-        return re_ranking(prob_feat,gal_feat,k1=20, k2=6, lambda_value=0.3)
+    if metric == 'cosine':
+        dist = cosine_similarity(prob_feat,gal_feat)
+    elif metric == 'euclidean':
+        dist = euclidean_distance(prob_feat,gal_feat)
     else:
-        if metric == 'cosine':
-            return cosine_similarity(prob_feat,gal_feat)
-        elif metric == 'euclidean':
-            return euclidean_distance(prob_feat,gal_feat)
-        else:
-            return None
+        logging.error(f'not support [{metric}] metric method')
+        return None
+    if is_re_ranking:
+        logging.info('Compute Re-Ranking...')
+        dist =  re_ranking(dist,prob_feat.shape[0],k1=20, k2=6, lambda_value=0.3)
+    return dist
 
 def euclidean_distance(qf, gf):
     m = qf.shape[0]
@@ -69,20 +72,14 @@ def cosine_similarity(qf, gf):
 #         return query_gallery_distance
 
 
-def re_ranking(probFea, galFea, k1, k2, lambda_value, local_distmat=None, only_local=False):
+def re_ranking(dist_mat, num_query, k1, k2, lambda_value, local_distmat=None, only_local=False):
     # if feature vector is numpy, you should use 'torch.tensor' transform it to tensor
-    query_num = probFea.size(0)
-    all_num = query_num + galFea.size(0)
+    query_num = num_query
+    all_num = dist_mat.shape[0]
     if only_local:
         original_dist = local_distmat
     else:
-        feat = torch.cat([probFea, galFea])
-        # print('using GPU to compute original distance')
-        distmat = torch.pow(feat, 2).sum(dim=1, keepdim=True).expand(all_num, all_num) + \
-                  torch.pow(feat, 2).sum(dim=1, keepdim=True).expand(all_num, all_num).t()
-        distmat.addmm_(1, -2, feat, feat.t())
-        original_dist = distmat.cpu().numpy()
-        del feat
+        original_dist = dist_mat.cpu().numpy()
         if not local_distmat is None:
             original_dist = original_dist + local_distmat
     gallery_num = original_dist.shape[0]
