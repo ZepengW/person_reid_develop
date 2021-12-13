@@ -477,11 +477,12 @@ class JointFromerPCBv2(nn.Module):
     '''
 
     def __init__(self, num_classes, vit_pretrained_path=None, parts=18, in_planes=768, feature_mode='pcb_vit_part',
-                 pretrained=True, use_heatmap = True, **kwargs):
+                 pretrained=True, use_heatmap = True, l2_norm = False, **kwargs):
         super(JointFromerPCBv2, self).__init__()
         self.parts = parts
         self.num_classes = num_classes
         self.in_planes = in_planes
+        self.l2_norm = l2_norm
         # extract feature
         self.feature_map_extract = PCB_Feature(block=Bottleneck, layers=[3, 4, 6, 3], pretrained=pretrained)
         # patch embeding
@@ -595,6 +596,8 @@ class JointFromerPCBv2(nn.Module):
         feats_part_vit = feats_part_vit.squeeze()
         feats_part_vit = self.bottleneck_part(feats_part_vit)
         feats = torch.cat([feats_global, feats_whole_vit, feats_part_vit], dim=1)
+        if self.l2_norm:
+            feats = feats / torch.norm(feats)
         # output
         if self.training:
             score = self.classify(feats)
@@ -617,6 +620,8 @@ class JointFromerPCBv2(nn.Module):
         feats_part_vit = feats_part_vit.squeeze()
         feats_part_vit = self.bottleneck_part(feats_part_vit)
         feats = torch.cat([feats_whole_vit, feats_part_vit], dim=1)
+        if self.l2_norm:
+            feats = feats / torch.norm(feats)
         # output
         if self.training:
             score = self.classify(feats)
@@ -653,6 +658,12 @@ class JointFromerPCBv2(nn.Module):
         feats_local_lower = self.bottleneck_lower(vit_feat_lower)
         # feature fuse
         feats_fus = torch.cat([feats_whole, feats_local_head / 3, feats_local_upper / 3, feats_local_lower / 3], dim=1)
+        if self.l2_norm:
+            feats_fus = feats_fus / torch.norm(feats_fus)
+            feats_whole = feats_whole / torch.norm(feats_whole)
+            feats_local_head = feats_local_head / torch.norm(feats_local_head)
+            feats_local_upper = feats_local_upper / torch.norm(feats_local_upper)
+            feats_local_lower = feats_local_lower / torch.norm(feats_local_lower)
         # output
         if self.training:
             score_fuse = self.classify_fuse(feats_fus)
