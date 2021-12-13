@@ -26,6 +26,7 @@ class OccludedReID(object):
         logging.info("  query             | {:5d} | {:8d}".format(num_query_pids, num_query_imgs))
         logging.info("  gallery           | {:5d} | {:8d}".format(num_test_pids, num_test_imgs))
         logging.info("  ------------------------------")
+        self.num_train_pids = num_train_pids
 
     def _process_data_train(self, dir):
         train_list = []
