@@ -54,7 +54,7 @@ class GetImgHeatmap(object):
             img = self.tf(img)
         hm_path = data.get('hm_path', '')
         if not os.path.isfile(hm_path):
-            hm = None
+            hm = -1
         else:
             hm = np.load(hm_path)
             hm = torch.from_numpy(hm)

@@ -546,7 +546,6 @@ class JointFromerPCBv2(nn.Module):
 
     def forward(self, img, heatmap):
         B = img.shape[0]
-        P = heatmap.shape[1]
         # extract feature
         feat_map = self.feature_map_extract(img)
         feats_global = self.proj(feat_map)  # (b, 2048, 1, 1)
