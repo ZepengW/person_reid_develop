@@ -23,7 +23,8 @@ DATASET_MAP = {
     'occreid': OccludedReID
 }
 __factory_reading_m = {
-    'get_img': m.GetImg
+    'get_img': m.GetImg,
+    'get_img_heatmap': m.GetImgHeatmap
 }
 
 def initial_m_reading(method_name, **kwargs):
