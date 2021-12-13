@@ -4,7 +4,7 @@ import os
 import logging
 import datetime
 from dataset import transforms as tf
-from dataset import DatasetManager, DatasetVideo
+from dataset import DatasetManager, initial_m_reading
 from model import ModelManager
 from torch.utils.data import DataLoader
 import yaml
@@ -49,14 +49,9 @@ def main(config, writer_tensorboardX):
     vis_interval = config.get('vis_interval', 20)    # interval of drawing feature distribution
     eval_interval = config.get('eval_interval', 20)
 
-
     dataset_config = config.get('dataset', dict())
     log_dataset_config(dataset_config)
-    size = dataset_config.get('image_size', [256,128])
-    ### pre transform methods on images
-    t = tf.build_transforms(size)
-    dataset_manager = DatasetManager(dataset_config.get('dataset_name', ''), dataset_config.get('dataset_path', ''),
-                                     num_mask=dataset_config.get('num-mask', 6))
+    dataset_manager = DatasetManager(dataset_config.get('dataset_name', ''), dataset_config.get('dataset_path', ''))
 
     model_config = config.get('model-manager', dict())
     model = ModelManager(model_config, device, class_num=dataset_manager.get_train_pid_num(),
@@ -64,12 +59,17 @@ def main(config, writer_tensorboardX):
 
     mode = config.get('mode', 'train')
     dataset_type = dataset_config.get('type', 'image')
-    get_dataset = getattr(dataset_manager, 'get_dataset_' + dataset_type)
+    get_dataset = dataset_manager.get_dataset_image  # support image reading for now
+    # get reading method
+    m_reading_train_cfg = dataset_config.get('reading_method_train')
+    m_reading_test_cfg = dataset_config.get('reading_method_test')
+    m_reading_train = initial_m_reading(m_reading_train_cfg.get('name'), **m_reading_train_cfg)
+    m_reading_test = initial_m_reading(m_reading_test_cfg.get('name'), **m_reading_test_cfg)
     if 'train' == mode:
         logging.info("loading train data")
         batch_size_train = dataset_config.get('batch_size_train', 16)
         num_instance = dataset_config.get('num_instance', 4)  # number of person with same id
-        dataset_train = get_dataset('train', transform=t)
+        dataset_train = get_dataset('train', m_reading_train)
         data_sampler = RandomIdentitySampler(dataset_manager.get_dataset_list('train'),
                                                  batch_size_train,
                                                  num_instance)
@@ -82,14 +82,14 @@ def main(config, writer_tensorboardX):
         logging.info("load train data finish")
         logging.info("loading test data")
         loader_gallery_source = DataLoader(
-            get_dataset('test', transform=t),
+            get_dataset('test', m_reading_test),
             batch_size=dataset_config.get('batch_size_test', 16),
             num_workers=dataset_config.get('num_workers', 8),
             drop_last=False,
             shuffle=False
         )
         loader_query_source = DataLoader(
-            get_dataset('query', transform=t),
+            get_dataset('query', m_reading_test),
             batch_size=dataset_config.get('batch_size_test', 16),
             num_workers=dataset_config.get('num_workers', 8),
             drop_last=False,
@@ -107,14 +107,14 @@ def main(config, writer_tensorboardX):
     elif 'test' == mode:
         logging.info("loading test data")
         loader_gallery_source = DataLoader(
-            get_dataset('test', transform=t),
+            get_dataset('test', m_reading_test),
             batch_size=dataset_config.get('batch_size_test', 16),
             num_workers=dataset_config.get('num_workers', 8),
             drop_last=False,
             shuffle=False
         )
         loader_query_source = DataLoader(
-            get_dataset('query', transform=t),
+            get_dataset('query', m_reading_test),
             batch_size=dataset_config.get('batch_size_test', 16),
             num_workers=dataset_config.get('num_workers', 8),
             drop_last=False,

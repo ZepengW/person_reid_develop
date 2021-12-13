@@ -1,0 +1,9 @@
+mode: train
+
+dataset:
+  dataset_name: duke
+  dataset_path: ../dataset/DukeMTMC-reID
+  num_workers: 8
+  batch_size_train: 64
+  batch_size_test: 128
+  type: image

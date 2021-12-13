@@ -51,3 +51,12 @@ dataset:
   batch_size_test: 128
   num_instance: 4
   type: image
+  # reading method
+  reading_method_train:
+    name: get_img
+    # define other parameter, such as image size
+    image_size: [256, 128]
+  reading_method_test:
+    name: get_img
+    # define other parameter, such as image size
+    image_size: [256, 128]

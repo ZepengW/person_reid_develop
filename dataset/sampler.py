@@ -22,7 +22,7 @@ class RandomIdentitySampler(Sampler):
         self.index_dic = defaultdict(list) #dict with list value
         #{783: [0, 5, 116, 876, 1554, 2041],...,}
         for index, data_dict in enumerate(self.data_source):
-            pid = data_dict[1]          # Need to forcibly specify pid as the second data
+            pid = data_dict.get('pid')          # Need to forcibly specify pid as the second data
             self.index_dic[pid].append(index)
         self.pids = list(self.index_dic.keys())
 
