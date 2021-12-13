@@ -52,4 +52,14 @@ class Market(object):
             for i in train_list:
                 train_list_relabel.append((i[0],id_list.index(i[1]),i[2],i[3],i[4]))
             train_list = train_list_relabel
-        return train_list, len(id_set), len(train_list)
+        # load as dict
+        data_list = []
+        for data in train_list:
+            data_list.append(
+                {
+                    'img_path': data[0],
+                    'pid': data[1],
+                    'cid': data[2]
+                }
+            )
+        return data_list, len(id_set), len(train_list)
