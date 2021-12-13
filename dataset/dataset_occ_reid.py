@@ -45,7 +45,6 @@ class OccludedReID(object):
         id_list.sort()
         train_list_relabel = []
         for i in train_list:
-            train_list_relabel.append((i[0], id_list.index(i[1]), i[2]))
             train_list_relabel.append(
                 {
                     'img_path': i[0],
