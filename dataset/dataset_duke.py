@@ -63,7 +63,9 @@ class Duke(object):
                 {
                     'img_path': data[0],
                     'pid': data[1],
-                    'cid': data[2]
+                    'cid': data[2],
+                    'clothes_id': data[3],
+                    'hm_path': data[4]
                 }
             )
         return data_list, len(id_set), len(train_list)
