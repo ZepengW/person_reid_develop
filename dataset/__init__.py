@@ -9,8 +9,9 @@ from dataset.dataset_market import Market
 from dataset.dataset_msmt import MSMT17
 from dataset.dataset_mars import Mars
 from dataset.dataset_ltcc import LTCC
+from dataset.dataset_occ_reid import OccludedReID
 import numpy as np
-
+import dataset.method_reading as m
 import logging
 
 DATASET_MAP = {
@@ -18,14 +19,28 @@ DATASET_MAP = {
     'duke': Duke,
     'msmt17': MSMT17,
     'mars': Mars,
-    'ltcc': LTCC
+    'ltcc': LTCC,
+    'occreid': OccludedReID
+}
+__factory_reading_m = {
+    'get_img': m.GetImg
 }
 
+def initial_m_reading(method_name, **kwargs):
+    '''
+    initial reading data method
+    :param method_name: method name in __factory_reading_m
+    :param kwargs:
+    :return:
+    '''
+    if method_name not in __factory_reading_m.keys():
+        logging.error(f'Method [{method_name}] is not supported')
+        raise Exception
+    return __factory_reading_m[method_name](**kwargs)
 
 class DatasetManager(object):
-    def __init__(self, dataset_name, dataset_dir, num_mask = 6):
+    def __init__(self, dataset_name, dataset_dir):
         self.dataset_name = dataset_name
-        self.num_mask = num_mask
         if not dataset_name in DATASET_MAP.keys():
             logging.error('dataset_name no exist. support:' + ','.join(DATASET_MAP.keys()))
             return
@@ -37,39 +52,29 @@ class DatasetManager(object):
     def get_dataset_list(self, mode):
         return getattr(self.dataset, mode)
 
-    def get_dataset_image(self, mode, transform=None, transform_mask=None):
+    def get_dataset_image(self, mode, m_reading):
         if not hasattr(self.dataset, mode):
             logging.error('can not find mode:' + mode + ' in dataset:' + self.dataset_name)
             return None
         datalist = getattr(self.dataset, mode)
-        return DatasetImage(datalist, transform=transform, transform_mask=transform_mask, num_mask=self.num_mask)
+        return DatasetImage(datalist, m_reading)
 
 
 class DatasetImage(Dataset):
     """Image Person ReID Dataset"""
 
-    def __init__(self, dataset, transform=None, transform_mask = None, num_mask=6):
+    def __init__(self, dataset, m_reading):
         self.dataset = dataset
-        self.transform = transform
-        self.transform_mask =transform_mask
-        # for mask
-        self.num_mask = num_mask
+        self.m_reading = m_reading
 
     def __len__(self):
         return len(self.dataset)
 
     def __getitem__(self, index):
-        item = self.dataset[index]
-        img_path = item[0]
-        p_id = item[1]
-        cam_id = item[2]
-        if len(item) > 3:
-            clothes_id = item[3]
-        else:
-            clothes_id = 0
-        img = Image.open(img_path).convert('RGB')
-        if self.transform is not None:
-            img = self.transform(img)
-        data_dict = {'img':img, 'pid':p_id, 'camera_id':cam_id, 'clothes_id':clothes_id}
-        return data_dict
+        """
+        :param index:
+        :param m_reading: method to read the data, generate dict
+        :return:
+        """
+        return self.m_reading(self.dataset[index])
 
