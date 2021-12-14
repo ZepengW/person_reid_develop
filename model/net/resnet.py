@@ -212,9 +212,11 @@ class ResNet(nn.Module):
 
         x = self.avgpool(x)
         f = torch.flatten(x, 1)
-        x = self.fc(f)
-
-        return x, f
+        if self.training:
+            x = self.fc(f)
+            return x, f
+        else:
+            return f
 
     def forward(self, img):
         return self._forward_impl(img)
