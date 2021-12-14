@@ -175,7 +175,7 @@ class ModelManager:
             # extract ids
             pids = data_dict.get('pid')
             cids = data_dict.get('camera_id')
-            clothes_ids = data_dict.get('clothes_id')
+            #clothes_ids = data_dict.get('clothes_id')
             # convert data inputted the network to self.device
             input_data = dict()
             for l in self.input_keys:
@@ -189,7 +189,7 @@ class ModelManager:
                 gf.append(f_whole)
                 gPids = np.concatenate((gPids, pids.numpy()), axis=0)
                 gCids = np.concatenate((gCids, cids.numpy()), axis=0)
-                gClothesids = np.concatenate((gClothesids, clothes_ids.numpy()), axis=0)
+                #gClothesids = np.concatenate((gClothesids, clothes_ids.numpy()), axis=0)
         gf = torch.cat(gf, dim=0)
 
         logging.info("compute features of query samples")
@@ -201,7 +201,7 @@ class ModelManager:
             # extract ids
             pids = data_dict.get('pid')
             cids = data_dict.get('camera_id')
-            clothes_ids = data_dict.get('clothes_id')
+            #clothes_ids = data_dict.get('clothes_id')
             # convert data inputted the network to self.device
             input_data = dict()
             for l in self.input_keys:
@@ -215,7 +215,7 @@ class ModelManager:
                 qf.append(f_whole)
                 qPids = np.concatenate((qPids, pids.numpy()), axis=0)
                 qCids = np.concatenate((qCids, cids.numpy()), axis=0)
-                qClothesids = np.concatenate((qClothesids, clothes_ids.numpy()), axis=0)
+                #qClothesids = np.concatenate((qClothesids, clothes_ids.numpy()), axis=0)
         qf = torch.cat(qf, dim=0)
 
         logging.info("compute rank list and score")
