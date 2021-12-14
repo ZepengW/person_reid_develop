@@ -30,6 +30,9 @@ def eval_func(distmat, q_pids, g_pids, q_camids, g_camids, max_rank=50, q_clo_id
             q_cloid = q_clo_ids[q_idx]
             # remove gallery samples that have the same pid and camid and clothes id with query
             remove = (g_pids[order] == q_pid) & ((g_camids[order] == q_camid) | (g_clo_ids[order] == q_cloid))
+        elif (q_camid == -1).all():
+            remove = (g_pids[order] == q_pid)
+            remove[:] = False
         else:
             # remove gallery samples that have the same pid and camid with query
             remove = (g_pids[order] == q_pid) & (g_camids[order] == q_camid)
@@ -38,7 +41,7 @@ def eval_func(distmat, q_pids, g_pids, q_camids, g_camids, max_rank=50, q_clo_id
         #list = [True] * np.shape(order)[0]
         #keep = np.array(list)
         # compute cmc curve
-        # binary vector, positions with value 1 are correct matches
+        # binary vector, positions with value 1 are correct matchesN
         orig_cmc = matches[q_idx][keep]
         if not np.any(orig_cmc):
             # this condition is true when query identity does not appear in gallery
