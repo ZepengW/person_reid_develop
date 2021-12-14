@@ -1,5 +1,5 @@
 mode: train
-task-name: JointFormer-PCBv2.2-occduke-pcb_vit_part-r18
+task-name: JointFormer-PCBv2.2-occduke-pcb_vit_part-all-l2_10
 gpu: [0]
 
 
@@ -15,6 +15,7 @@ model-manager:
     use_heatmap: False
     parts: 18
     l2_norm: True
+    mold: 10
   network_inputs: ['img','heatmap'] # the data dict keys which the network input
   epoch: 500
   solver:
@@ -48,12 +49,17 @@ model-manager:
 dataset:
   dataset_name: duke
   dataset_path: ../dataset/Occluded-DukeMTMC
-  image_size:
-    - 384
-    - 128
   num_workers: 8
-  batch_size_train: 128
-  batch_size_test: 256
+  batch_size_train: 64
+  batch_size_test: 128
   type: image
+  reading_method_train:
+    name: get_img_heatmap
+    # define other parameter, such as image size
+    image_size: [384, 128]
+  reading_method_test:
+    name: get_img_heatmap
+    # define other parameter, such as image size
+    image_size: [384, 128]
 
 

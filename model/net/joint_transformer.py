@@ -483,6 +483,7 @@ class JointFromerPCBv2(nn.Module):
         self.num_classes = num_classes
         self.in_planes = in_planes
         self.l2_norm = l2_norm
+        self.mold = kwargs.get('mold', 100)
         # extract feature
         self.feature_map_extract = PCB_Feature(block=Bottleneck, layers=[3, 4, 6, 3], pretrained=pretrained)
         # patch embeding
@@ -596,7 +597,7 @@ class JointFromerPCBv2(nn.Module):
         feats_part_vit = self.bottleneck_part(feats_part_vit)
         feats = torch.cat([feats_global, feats_whole_vit, feats_part_vit], dim=1)
         if self.l2_norm:
-            feats = feats / torch.norm(feats)
+            feats = feats / torch.norm(feats) * self.mold
         # output
         if self.training:
             score = self.classify(feats)
