@@ -196,7 +196,7 @@ class ModelManager:
         qf = []
         qPids = np.array([], dtype=int)
         qCids = np.array([], dtype=int)
-        qClothesids = np.array([], dtype=int)
+        #qClothesids = np.array([], dtype=int)
         for idx, data_dict in enumerate(queryLoader):
             # extract ids
             pids = data_dict.get('pid')
@@ -215,7 +215,7 @@ class ModelManager:
                 qf.append(f_whole)
                 qPids = np.concatenate((qPids, pids.numpy()), axis=0)
                 qCids = np.concatenate((qCids, cids.numpy()), axis=0)
-                qClothesids = np.concatenate((qClothesids, clothes_ids.numpy()), axis=0)
+                #qClothesids = np.concatenate((qClothesids, clothes_ids.numpy()), axis=0)
         qf = torch.cat(qf, dim=0)
 
         logging.info("compute rank list and score")
