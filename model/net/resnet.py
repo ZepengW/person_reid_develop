@@ -200,22 +200,23 @@ class ResNet(nn.Module):
 
     def _forward_impl(self, img):
         # See note [TorchScript super()]
-        img = self.conv1(img)
-        img = self.bn1(img)
-        img = self.relu(img)
-        img = self.maxpool(img)
+        x = self.conv1(x)
+        x = self.bn1(x)
+        x = self.relu(x)
+        x = self.maxpool(x)
 
-        img = self.layer1(img)
-        img = self.layer2(img)
-        img = self.layer3(img)
-        img = self.layer4(img)
-        f = img
+        x = self.layer1(x)
+        x = self.layer2(x)
+        x = self.layer3(x)
+        x = self.layer4(x)
 
-        img = self.avgpool(img)
-        img = torch.flatten(img, 1)
-        img = self.fc(img)
-
-        return img, f
+        x = self.avgpool(x)
+        f = torch.flatten(x, 1)
+        if self.training:
+            x = self.fc(f)
+            return x, f
+        else:
+            return f
 
     def forward(self, img):
         return self._forward_impl(img)

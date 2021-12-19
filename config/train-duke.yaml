@@ -1,4 +1,6 @@
-mode: train
+mode: test
+vis: True       # visualize feature distribution
+vis_interval: 20  # visualization each [vis_interval]
 
 dataset:
   dataset_name: duke

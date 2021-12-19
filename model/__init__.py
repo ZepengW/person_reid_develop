@@ -4,7 +4,7 @@ import os
 import logging
 import torch.nn as nn
 from torch.utils.data import DataLoader
-from utils.eval_reid import eval_func
+from utils.eval_reid import eval_func, visualize_result
 import numpy as np
 from utils.re_ranking import re_ranking, compute_dis_matrix
 from model.model_factory import make_model
@@ -163,19 +163,19 @@ class ModelManager:
         self.save_model(self.net, self.model_name, epoch)
         logging.info("Train Finish")
 
-    def test(self, queryLoader: DataLoader, galleryLoader: DataLoader, epoch = 0, is_vis = False):
+    def test(self, queryLoader: DataLoader, galleryLoader: DataLoader, epoch = 0, is_vis = False, **kwargs):
         logging.info(f"[Testing...] Epoch:{epoch:>3d}".center(80,'='))
         self.net.eval()
         gf = []
         gPids = np.array([], dtype=int)
         gCids = np.array([], dtype=int)
-        gClothesids = np.array([], dtype=int)
+        g_img_paths = []
         logging.info("compute features of gallery samples")
         for idx, data_dict in enumerate(galleryLoader):
             # extract ids
             pids = data_dict.get('pid')
             cids = data_dict.get('camera_id')
-            #clothes_ids = data_dict.get('clothes_id')
+            imgs_path = data_dict.get('img_path')
             # convert data inputted the network to self.device
             input_data = dict()
             for l in self.input_keys:
@@ -190,18 +190,19 @@ class ModelManager:
                 gPids = np.concatenate((gPids, pids.numpy()), axis=0)
                 gCids = np.concatenate((gCids, cids.numpy()), axis=0)
                 #gClothesids = np.concatenate((gClothesids, clothes_ids.numpy()), axis=0)
+                g_img_paths += imgs_path
         gf = torch.cat(gf, dim=0)
 
         logging.info("compute features of query samples")
         qf = []
         qPids = np.array([], dtype=int)
         qCids = np.array([], dtype=int)
-        #qClothesids = np.array([], dtype=int)
+        q_img_paths = []
         for idx, data_dict in enumerate(queryLoader):
             # extract ids
             pids = data_dict.get('pid')
             cids = data_dict.get('camera_id')
-            #clothes_ids = data_dict.get('clothes_id')
+            imgs_path = data_dict.get('img_path')
             # convert data inputted the network to self.device
             input_data = dict()
             for l in self.input_keys:
@@ -215,40 +216,37 @@ class ModelManager:
                 qf.append(f_whole)
                 qPids = np.concatenate((qPids, pids.numpy()), axis=0)
                 qCids = np.concatenate((qCids, cids.numpy()), axis=0)
-                #qClothesids = np.concatenate((qClothesids, clothes_ids.numpy()), axis=0)
+                q_img_paths += imgs_path
         qf = torch.cat(qf, dim=0)
 
         logging.info("compute rank list and score")
         distmat = compute_dis_matrix(qf,gf,self.metrics, self.re_ranking)
         # standard mode
-        cmc_s, mAP_s, mINP_s = eval_func(distmat, qPids, gPids, qCids, gCids)
+        if not is_vis:
+            q_img_paths = None
+            g_img_paths = None
+        cmc_s, mAP_s, mINP_s, res_vis = eval_func(distmat, qPids, gPids, qCids, gCids,
+                                                  q_img_paths=q_img_paths,g_img_paths=g_img_paths)
         # clothes changing mode
         # cmc_c, mAP_c, mINP_c = eval_func(distmat, qPids, gPids, qCids, gCids, q_clo_ids=qClothesids,
         #                                  g_clo_ids=gClothesids)
         logging.info(f'standard mode test result:[rank-1:{cmc_s[0]:.2%}],[rank-3:{cmc_s[2]:.2%}]'
                      f',[rank-5:{cmc_s[4]:.2%}],[rank-10:{cmc_s[9]:.2%}]')
         logging.info(f'standard mode test result:[mAP:{mAP_s:.2%}],[mINP:{mINP_s:.2%}]')
-        # logging.info(f'clothes changing mode test result:[rank-1:{cmc_c[0]:.2%}],[rank-3:{cmc_c[2]:.2%}]'
-        #              f',[rank-5:{cmc_c[4]:.2%}],[rank-10:{cmc_c[9]:.2%}]')
-        # logging.info(f'clothes changing mode test result:[mAP:{mAP_c:.2%}],[mINP:{mINP_c:.2%}]')
         if self.writer is not None:
             self.writer.add_scalar('test-standard/rank-1', cmc_s[0], epoch)
             self.writer.add_scalar('test-standard/mAP', mAP_s, epoch)
             self.writer.add_scalar('test-standard/mINP', mINP_s, epoch)
-            # for i, p in enumerate(cmc_s):
-            #     self.writer.add_scalar(f'test-standard/cmc/e{epoch}', p, i)
-            # self.writer.add_scalar('test-changing/rank-1', cmc_c[0], epoch)
-            # self.writer.add_scalar('test-changing/mAP', mAP_c, epoch)
-            # self.writer.add_scalar('test-changing/mINP', mINP_c, epoch)
-            # for i, p in enumerate(cmc_c):
-            #     self.writer.add_scalar(f'test-changing/cmc/e{epoch}', p, i)
             # feature visualization
             if is_vis:
+                logging.info(f'generate visual result...')
                 features_test = torch.cat([gf.cpu(), qf.cpu()])
                 pids_l = gPids.tolist() + qPids.tolist()
                 features_test, pids_arr = self.filter_feature(features_test,pids_l,self.vis_pid_test)
                 if not None == pids_arr:
                     self.writer.add_embedding(features_test, metadata=pids_arr.tolist(), global_step=epoch, tag='test')
+                # vis result imgs
+                visualize_result(res_vis, writer=self.writer, **kwargs)
         logging.info("[Test Finish]".center(80,'='))
 
     def filter_feature(self, features:torch.Tensor, pids_l:list, vis_pid):

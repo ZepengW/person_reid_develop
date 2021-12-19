@@ -29,7 +29,7 @@ class GetImg(object):
         else:
             img = Image.open(img_path).convert('RGB')
             img = self.tf(img)
-        data_dict = {'img': img, 'pid': pid, 'camera_id': cid}
+        data_dict = {'img': img, 'pid': pid, 'camera_id': cid, 'img_path': img_path}
         return data_dict
 
 

@@ -24,6 +24,7 @@ def set_seed(seed):
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = True
 
+
 # set cuda visible devices, and return the first gpu device
 def set_gpus_env(gpu_ids):
     os.environ['CUDA_VISIBLE_DEVICES'] = ','.join([str(id) for id in gpu_ids])
@@ -35,7 +36,8 @@ def set_gpus_env(gpu_ids):
         if gpu_ids.index(gpu_id) >= gpus_count:
             logging.warning('gpu id:{0} exceeds the limit , which only have {1} gpus'.format(gpu_id, gpus_count))
             gpu_ids.remove(gpu_id)
-        logging.info('using gpu: id is ' + str(gpu_id) + ' name is ' + torch.cuda.get_device_name(gpu_ids.index(gpu_id)))
+        logging.info(
+            'using gpu: id is ' + str(gpu_id) + ' name is ' + torch.cuda.get_device_name(gpu_ids.index(gpu_id)))
     if len(gpu_ids) == 0:
         gpu_ids.append(0)
         logging.warning('all the config gpus can not be used, use gpu:0')
@@ -43,10 +45,12 @@ def set_gpus_env(gpu_ids):
 
 
 def main(config, writer_tensorboardX):
-    set_seed(config.get('seed',1234))
+    set_seed(config.get('seed', 1234))
     device = set_gpus_env(config.get('gpu', [0]))
-    vis_bool = config.get('vis', False)     # draw feature distribution
-    vis_interval = config.get('vis_interval', 20)    # interval of drawing feature distribution
+    # vis config
+    cfg_vis = config.get('vis_params', dict())
+    vis_bool = cfg_vis.get('vis', False)  # draw feature distribution
+    vis_interval = cfg_vis.get('vis_interval', 20)  # interval of drawing feature distribution
     eval_interval = config.get('eval_interval', 20)
 
     dataset_config = config.get('dataset', dict())
@@ -71,8 +75,8 @@ def main(config, writer_tensorboardX):
         num_instance = dataset_config.get('num_instance', 4)  # number of person with same id
         dataset_train = get_dataset('train', m_reading_train)
         data_sampler = RandomIdentitySampler(dataset_manager.get_dataset_list('train'),
-                                                 batch_size_train,
-                                                 num_instance)
+                                             batch_size_train,
+                                             num_instance)
         loader_train_source = DataLoader(
             dataset_train,
             batch_size=batch_size_train,
@@ -98,12 +102,14 @@ def main(config, writer_tensorboardX):
         logging.info("load test data finish")
         logging.info("prepare to train from epoch[{0}] to epoch[{1}]".format(model.trained_epoches,
                                                                              model_config.get('epoch', 64)))
-        for i in range(model.trained_epoches+1, model_config.get('epoch', 64)+1):
-            is_vis = (i % vis_interval == 0 or i == model_config.get('epoch', 64)) #each vis_interval or last epoch
+        for i in range(model.trained_epoches + 1, model_config.get('epoch', 64) + 1):
+            is_vis = (i % vis_interval == 0 or i == model_config.get('epoch', 64))  # each vis_interval or last epoch
             is_vis = is_vis and vis_bool
             model.train(loader_train_source, i, is_vis)
             if (i % eval_interval == 0) or i == model_config.get('epoch', 64):
-                model.test(loader_query_source, loader_gallery_source, epoch=i, is_vis=is_vis)
+                model.test(loader_query_source, loader_gallery_source, epoch=i, is_vis=is_vis,
+                           sample_method=cfg_vis.get('vis_img_func', 'random'),
+                           sample_num=cfg_vis.get('vis_img_num', '100'))
     elif 'test' == mode:
         logging.info("loading test data")
         loader_gallery_source = DataLoader(
@@ -121,14 +127,16 @@ def main(config, writer_tensorboardX):
             shuffle=False
         )
         logging.info("load test data finish")
-        model.test(loader_query_source, loader_gallery_source, is_vis=vis_bool)
+        model.test(loader_query_source, loader_gallery_source, is_vis=vis_bool,
+                   sample_method=cfg_vis.get('vis_img_func', 'random'),
+                   sample_num=cfg_vis.get('vis_img_num', '100'))
     else:
         logging.error(f'not support mode:{mode}')
 
     logging.info("finish!")
 
 
-def init_logging(task_name='', is_save = True):
+def init_logging(task_name='', is_save=True):
     # log config
     log_dir_name = ''
     if is_save:
@@ -158,15 +166,16 @@ def init_logging(task_name='', is_save = True):
     logging.getLogger().addHandler(console)
     return log_dir_name
 
-def log_dataset_config(dataset_config:dict):
+
+def log_dataset_config(dataset_config: dict):
     logging.info('=> DataSet Info:')
     logging.info(f'----dataset:{dataset_config.get("dataset_name")}')
     logging.info(f'----path:{dataset_config.get("dataset_path")}')
-    logging.info(f'----img_size:{dataset_config.get("image_size",[256, 128])}')
+    logging.info(f'----img_size:{dataset_config.get("image_size", [256, 128])}')
     logging.info(f'----batch_size_train:{dataset_config.get("batch_size_train", 16)}')
     logging.info(f'----num_instance:{dataset_config.get("num_instance", 4)}')
     logging.info(f'----batch_size_test:{dataset_config.get("batch_size_test", 16)}')
-    logging.info(f'----transform method:{dataset_config.get("transform","None")}')
+    logging.info(f'----transform method:{dataset_config.get("transform", "None")}')
     logging.info(f'----num_workers:{dataset_config.get("num_workers", 8)}')
 
 
@@ -195,6 +204,7 @@ def merge_data(data_1, data_2):
         else:
             return data_2
 
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--cfg_base', type=str, default='config/cfg-base.yaml', help='the config file(.yaml)')
@@ -218,14 +228,13 @@ if __name__ == '__main__':
         cfg = f.read()
         yaml_cfg_detail = yaml.safe_load(cfg)
 
-    yaml_cfg = merge_data(yaml_cfg_base,yaml_cfg_detail)
+    yaml_cfg = merge_data(yaml_cfg_base, yaml_cfg_detail)
     if not os.path.isdir('./output'):
         os.mkdir('./output')
     if not os.path.isdir('./output/log'):
         os.mkdir('./output/log')
 
     yaml_str = str(tools.format_dict(yaml_cfg))
-
 
     if not config.no_log:
         # initial logging module

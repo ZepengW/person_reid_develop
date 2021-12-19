@@ -1,7 +1,6 @@
 gpu: [0]
 eval_interval: 10 # eval each [eval_interval]
-vis: False       # visualize feature distribution
-vis_interval: 20  # visualization each [vis_interval]
+
 
 model-manager:
   network_name: resnet50 # the network model
@@ -60,3 +59,9 @@ dataset:
     name: get_img
     # define other parameter, such as image size
     image_size: [256, 128]
+
+vis_params: # vis in tensorboardx
+  vis: False       # visualize feature distribution
+  vis_interval: 20  # visualization each [vis_interval]
+  vis_img_func: list_false  # support: random, list_false, all
+  vis_img_num: 100          # only valid in vis_img_func = random
