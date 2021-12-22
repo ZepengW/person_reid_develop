@@ -114,8 +114,8 @@ class TripletLoss(object):
             loss = self.ranking_loss(dist_an, dist_ap, y)
         else:
             loss = self.ranking_loss(dist_an - dist_ap, y)
-        if torch.isnan(loss) or torch.isinf(loss):
-            print(f'[Warning] Exist Inf/ Nan Loss : {loss}')
+        #if torch.isnan(loss) or torch.isinf(loss):
+            #print(f'[Warning] Exist Inf/ Nan Loss : {loss}')
             # print(f'[Warning] Targets are : {targets}')
             # print(f'[Warning] dist_ap are : {dist_ap}')
             # print(f'[Warning] dist_an are : {dist_an}')

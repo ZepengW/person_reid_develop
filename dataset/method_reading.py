@@ -58,5 +58,5 @@ class GetImgHeatmap(object):
         else:
             hm = np.load(hm_path)
             hm = torch.from_numpy(hm)
-        data_dict = {'img': img, 'pid': pid, 'camera_id': cid, 'heatmap':hm}
+        data_dict = {'img': img, 'pid': pid, 'camera_id': cid, 'heatmap':hm, 'img_path': img_path}
         return data_dict

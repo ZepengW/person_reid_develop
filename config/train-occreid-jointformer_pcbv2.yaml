@@ -1,5 +1,5 @@
 mode: train
-task-name: JointFormer-PCBv2.2-occreid-pcb_vit_part-r18
+task-name: JointFormer-PCBv2.2-occreid-pcb_vit_part-r18-l2-modle
 gpu: [0]
 
 
