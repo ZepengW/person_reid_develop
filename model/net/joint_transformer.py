@@ -8,6 +8,28 @@ import torch
 import logging
 import random
 
+def weights_init_kaiming(m):
+    classname = m.__class__.__name__
+    if classname.find('Linear') != -1:
+        nn.init.kaiming_normal_(m.weight, a=0, mode='fan_out')
+        nn.init.constant_(m.bias, 0.0)
+
+    elif classname.find('Conv') != -1:
+        nn.init.kaiming_normal_(m.weight, a=0, mode='fan_in')
+        if m.bias is not None:
+            nn.init.constant_(m.bias, 0.0)
+    elif classname.find('BatchNorm') != -1:
+        if m.affine:
+            nn.init.constant_(m.weight, 1.0)
+            nn.init.constant_(m.bias, 0.0)
+
+def weights_init_classifier(m):
+    classname = m.__class__.__name__
+    if classname.find('Linear') != -1:
+        nn.init.normal_(m.weight, std=0.001)
+        if m.bias:
+            nn.init.constant_(m.bias, 0.0)
+
 class JointFromer(nn.Module):
     '''
     Joint Transformer
@@ -689,28 +711,7 @@ class JointFromerPCBv2(nn.Module):
 
 
 
-def weights_init_classifier(m):
-    classname = m.__class__.__name__
-    if classname.find('Linear') != -1:
-        nn.init.normal_(m.weight, std=0.001)
-        if m.bias:
-            nn.init.constant_(m.bias, 0.0)
 
-
-def weights_init_kaiming(m):
-    classname = m.__class__.__name__
-    if classname.find('Linear') != -1:
-        nn.init.kaiming_normal_(m.weight, a=0, mode='fan_out')
-        nn.init.constant_(m.bias, 0.0)
-
-    elif classname.find('Conv') != -1:
-        nn.init.kaiming_normal_(m.weight, a=0, mode='fan_in')
-        if m.bias is not None:
-            nn.init.constant_(m.bias, 0.0)
-    elif classname.find('BatchNorm') != -1:
-        if m.affine:
-            nn.init.constant_(m.weight, 1.0)
-            nn.init.constant_(m.bias, 0.0)
 
 
 def shuffle_unit(features, shift, group, begin=1):
@@ -731,17 +732,112 @@ def shuffle_unit(features, shift, group, begin=1):
     return x
 
 
-def weights_init_kaiming(m):
-    classname = m.__class__.__name__
-    if classname.find('Linear') != -1:
-        nn.init.kaiming_normal_(m.weight, a=0, mode='fan_out')
-        nn.init.constant_(m.bias, 0.0)
+class JointFromerPCBv3(nn.Module):
+    '''
+    Joint Transformer using PCB to generate feature map
+    '''
 
-    elif classname.find('Conv') != -1:
-        nn.init.kaiming_normal_(m.weight, a=0, mode='fan_in')
-        if m.bias is not None:
-            nn.init.constant_(m.bias, 0.0)
-    elif classname.find('BatchNorm') != -1:
-        if m.affine:
-            nn.init.constant_(m.weight, 1.0)
-            nn.init.constant_(m.bias, 0.0)
+    def __init__(self, num_classes, vit_pretrained_path=None, parts=18, in_planes=768, feature_mode='pcb_vit_part',
+                 pretrained=True, use_heatmap = True, l2_norm = False, **kwargs):
+        super(JointFromerPCBv3, self).__init__()
+        self.parts = parts
+        self.num_classes = num_classes
+        self.in_planes = in_planes
+        self.l2_norm = l2_norm
+        self.mold = kwargs.get('mold', 100)
+        # extract feature
+        self.feature_map_extract = PCB_Feature(block=Bottleneck, layers=[3, 4, 6, 3], pretrained=pretrained)
+        # patch embeding
+        self.downsample_global = nn.Conv2d(2048, 1024, kernel_size=1)
+        self.downsample = nn.Conv2d(2048, in_planes, kernel_size=1)
+        # self.proj = torch.nn.AdaptiveAvgPool2d((1,1))
+        self.proj = torch.nn.AdaptiveMaxPool2d((1, 1))
+        # vit backbone network
+        self.transformer = TransReID(num_classes=num_classes, num_patches=parts, embed_dim=self.in_planes, depth=12,
+                                     num_heads=12, mlp_ratio=4, qkv_bias=True)
+        if not vit_pretrained_path is None:
+            self.transformer.load_param(vit_pretrained_path)
+        # bottleneck
+        self.bottleneck = nn.BatchNorm1d(1024)
+        self.bottleneck.bias.requires_grad_(False)
+        self.bottleneck.apply(weights_init_kaiming)
+        self.bottleneck_whole = nn.BatchNorm1d(self.in_planes)
+        self.bottleneck_whole.bias.requires_grad_(False)
+        self.bottleneck_whole.apply(weights_init_kaiming)
+        self.bottleneck_part = nn.BatchNorm1d(self.in_planes)
+        self.bottleneck_part.bias.requires_grad_(False)
+        self.bottleneck_part.apply(weights_init_kaiming)
+        # feature fusion
+        self.feat_fuse = torch.nn.AdaptiveMaxPool1d(1)
+        # classify layer
+        self.feature_mode = feature_mode
+        # verify the vilidation of heatmap
+        self.use_heatmap = use_heatmap
+
+        if self.feature_mode == 'pcb_vit_part':
+            self.classify = nn.Linear(2 * self.in_planes + 1024, self.num_classes, bias=False)
+        elif self.feature_mode == 'vit_cls':
+            self.classify_whole = nn.Linear(self.in_planes, self.num_classes, bias=False)
+
+    def forward(self, img, heatmap):
+        B = img.shape[0]
+        # extract feature
+        feat_map = self.feature_map_extract(img)
+        feats_global = self.proj(feat_map)  # (b, 2048, 1, 1)
+        feats_global = self.downsample_global(feats_global)
+        feats_global = feats_global.squeeze()
+        feat_map = self.downsample(feat_map)
+
+        # generate patch
+        if self.use_heatmap:
+            heatmap = heatmap.float()
+            feat_map = torch.einsum('bphw,bchw->bpc',heatmap, feat_map)
+            feat_map = feat_map / (heatmap.shape[2] * heatmap.shape[3])
+            zero_patch_index = torch.sum(feat_map, dim = 2) == 0
+            zero_patch_index = zero_patch_index.unsqueeze(-1).repeat(1,1,feat_map.shape[2])
+            noise = torch.randn_like(feat_map)
+            feat_patch = torch.where(zero_patch_index, noise, feat_map)
+        else:
+            # random sample feat_patch
+            feat_map = torch.reshape(feat_map,[feat_map.shape[0], feat_map.shape[1], -1]) #feat map's shape : b, c, fh*fw
+            feat_map = feat_map.permute([0, 2, 1])  #feat map's shape : b, fh*fw, c
+            feat_patch_index = torch.LongTensor(random.sample(range(feat_map.shape[1]), self.parts))
+            feat_patch = feat_map[:,feat_patch_index]
+        # transformer
+        feats = self.transformer(feat_patch)
+
+        if self.feature_mode == 'pcb_vit_part':
+            return self.get_whole_vit_part(feats_global, feats)
+        elif self.feature_mode == 'vit_cls':
+            return self.get_vit_cls(feats)
+
+    def get_whole_vit_part(self, feats_global, feats):
+        # bottleneck
+        feats_global = self.bottleneck(feats_global)
+        feats_whole_vit = feats[:, 0]
+        feats_whole_vit = self.bottleneck_whole(feats_whole_vit)
+        feats_part_vit = feats[:, 1:]
+        feats_part_vit = feats_part_vit.permute([0, 2, 1])
+        feats_part_vit = self.feat_fuse(feats_part_vit)
+        feats_part_vit = feats_part_vit.squeeze()
+        feats_part_vit = self.bottleneck_part(feats_part_vit)
+        feats = torch.cat([feats_global, feats_whole_vit, feats_part_vit], dim=1)
+        if self.l2_norm:
+            feats = feats / torch.norm(feats) * self.mold
+        # output
+        if self.training:
+            score = self.classify(feats)
+            return score, feats
+        else:
+            return feats
+
+    def get_vit_cls(self, feats):
+        feats_whole = feats[:, 0]
+        feats_whole = self.bottleneck_whole(feats_whole)
+        if self.l2_norm:
+            feats_whole = feats_whole / torch.norm(feats_whole) * self.mold
+        if self.training:
+            score_cls = self.classify_whole(feats_whole)
+            return score_cls, feats_whole
+        else:
+            return feats_whole
