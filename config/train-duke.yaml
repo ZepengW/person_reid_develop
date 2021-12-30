@@ -9,3 +9,10 @@ dataset:
   batch_size_train: 64
   batch_size_test: 128
   type: image
+
+
+vis_params: # vis in tensorboardx
+  vis: True       # visualize feature distribution
+  vis_interval: 20  # visualization each [vis_interval]
+  vis_img_func: all  # support: random, list_false, all
+  vis_img_num: 100          # only valid in vis_img_func = random
