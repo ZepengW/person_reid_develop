@@ -41,7 +41,7 @@ def compute_dis_matrix(prob_feat, gal_feat, metric, is_re_ranking=True):
         dist_q_q = method_metric(prob_feat, prob_feat)
         dist_g_g = method_metric(gal_feat, gal_feat)
         logging.info('Re-Ranking...')
-        dist_q_g =  re_ranking_optimize(dist_q_g,dist_q_q,dist_g_g,k1=20, k2=6, lambda_value=0.3)
+        dist_q_g =  re_ranking_optimize(dist_q_g,dist_q_q,dist_g_g,k1=50, k2=15, lambda_value=0.3)
     return dist_q_g
 
 def euclidean_distance(qf, gf):
