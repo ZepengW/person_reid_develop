@@ -5,6 +5,7 @@ import cv2
 import math
 import random
 import torch
+import os
 
 def eval_func(distmat, q_pids, g_pids, q_camids, g_camids, max_rank=50, q_img_paths=None, g_img_paths=None):
     """
@@ -51,7 +52,10 @@ def eval_func(distmat, q_pids, g_pids, q_camids, g_camids, max_rank=50, q_img_pa
         if q_img_paths is not None and g_img_paths is not None:
             # first element is query image path, others are ranked gallery image path
             r = np.concatenate([q_img_paths[q_idx:q_idx+1], g_img_paths[order][keep]])
-            res_vis.append((r, orig_cmc))
+            pids = []
+            pids.append(q_pid)
+            pids += g_pids[order][keep].tolist()
+            res_vis.append((r, orig_cmc, pids))
 
         cmc = orig_cmc.cumsum()
         pos_idx = np.where(orig_cmc == 1)
@@ -83,7 +87,7 @@ def eval_func(distmat, q_pids, g_pids, q_camids, g_camids, max_rank=50, q_img_pa
     return all_cmc, mAP, mINP, res_vis
 
 
-def visualize_result(res_vis, max_rank=10, size=(32, 64), sample_method='random', sample_num = 20, writer=None):
+def visualize_result(res_vis, max_rank=10, size=(50, 100), sample_method='random', sample_num = 20, writer=None):
     '''
     visualize rank result generate by eval_func
     :param res_vis:
@@ -97,9 +101,8 @@ def visualize_result(res_vis, max_rank=10, size=(32, 64), sample_method='random'
         return
     imgs = []
     r1_flag_l = []
-    label_list = []
-    for (img_paths, labels) in res_vis:
-        img_vis, r1_flag = conbine_imgs(img_paths,size,labels,max_rank)
+    for (img_paths, labels, pids) in res_vis:
+        img_vis, r1_flag = conbine_imgs(img_paths,size,labels,pids, max_rank)
         imgs.append(img_vis)
         r1_flag_l.append(r1_flag)
     if sample_method == 'random':
@@ -117,7 +120,7 @@ def visualize_result(res_vis, max_rank=10, size=(32, 64), sample_method='random'
 
 
 
-def conbine_imgs(img_paths, size, labels, max_rank = 10):
+def conbine_imgs(img_paths, size, labels, pids, max_rank = 10):
     '''
     combine query img and ranked gallery imgs to a total img
     :param img_paths:
@@ -129,10 +132,15 @@ def conbine_imgs(img_paths, size, labels, max_rank = 10):
     q_img_path = img_paths[0]
     q_img = cv2.imread(q_img_path)
     q_img = cv2.resize(q_img, size)
+    # add query text label
+    text_bg = np.zeros([20, q_img.shape[1], q_img.shape[2]])
+    q_pid = pids[0]
+    text_bg = cv2.putText(text_bg, str(q_pid), (0, 15), cv2.FONT_HERSHEY_COMPLEX, 0.5, (255, 255, 255), 1)
+    q_img = np.concatenate([q_img, text_bg], 0)
     img_res = []
     img_res.append(q_img)
     # append space
-    space = np.zeros_like(q_img)
+    space = np.zeros([q_img.shape[0], int(q_img.shape[1] / 2), q_img.shape[2]], dtype='uint8')
     space[:] = 255
     img_res.append(space)
     rank1_success_marks = False # this is used to mark the rank 1 result is True or False
@@ -147,11 +155,16 @@ def conbine_imgs(img_paths, size, labels, max_rank = 10):
             # wrong
             g_img = cv2.rectangle(g_img, (0, 0), (size[0] - 1, size[1] - 1), (255, 0, 0), 2)
             flag = False
+        # add text label
+        text_bg = np.zeros([20, g_img.shape[1], g_img.shape[2]], dtype='uint8')
+        pid = pids[i + 1]
+        text_bg = cv2.putText(text_bg, str(pid), (0, 15), cv2.FONT_HERSHEY_COMPLEX, 0.5, (255, 255, 255), 1)
+        g_img = np.concatenate([g_img, text_bg], 0)
         if i == 0:
             rank1_success_marks = flag
         img_res.append(g_img)
     img_res = np.concatenate(img_res, 1)
     img_res = np.transpose(img_res, (2, 0, 1))
-    img_res = torch.tensor(img_res)
+    img_res = torch.tensor(img_res, dtype=torch.uint8)
     #img_res = torch.unsqueeze(img_res,dim=0)
     return img_res, rank1_success_marks
