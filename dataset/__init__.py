@@ -24,7 +24,8 @@ DATASET_MAP = {
 }
 __factory_reading_m = {
     'get_img': m.GetImg,
-    'get_img_heatmap': m.GetImgHeatmap
+    'get_img_heatmap': m.GetImgHeatmap,
+    'get_img_ss': m.GetImgWithSem
 }
 
 def initial_m_reading(method_name, **kwargs):
