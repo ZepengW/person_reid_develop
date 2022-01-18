@@ -43,7 +43,7 @@ class Duke(object):
                 continue
             img_path = os.path.join(dir,file)
             pid = int(file.split('_')[0])
-            cid = int((file.split('c')[1]).split('_')[0])
+            cid = int((file.split('c')[1]).split('_')[0]) - 1
             clothes_id = -1
             hm_path = os.path.join(hm_dir,os.path.splitext(file)[0]+'.npy')
             train_list.append((img_path,pid,cid,clothes_id,hm_path))

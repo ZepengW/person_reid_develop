@@ -37,7 +37,7 @@ class OccludedReID(object):
                 continue
             img_path = os.path.join(dir, file)
             pid = int(file.split('_')[0])
-            cid = int((file.split('c')[1]).split('s')[0])
+            cid = int((file.split('c')[1]).split('s')[0]) - 1
             train_list.append((img_path, pid, cid))
             id_set.add(pid)
         # relabel id to continues
