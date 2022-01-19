@@ -80,7 +80,9 @@ class GetImgWithSem(object):
         flip_prob = kwargs.get('flip_prob', 0.5)
         self.tf_shape = build_transorms_shape(self.img_size, self.mode, padding = padding, flip_prob = flip_prob)
         re_prob = kwargs.get('re_prob', 0.5)
-        self.tf_value = build_transorms_value(mode = self.mode, re_prob = re_prob)
+        pixel_mean = kwargs.get('pixel_mean', [0.485, 0.456, 0.406])
+        pixel_std = kwargs.get('pixel_std', [0.229, 0.224, 0.225])
+        self.tf_value = build_transorms_value(mode = self.mode, re_prob = re_prob, pixel_mean = pixel_mean, pixel_std = pixel_std)
         self.to_tensor = T.ToTensor()
 
     def __call__(self, data: dict):
