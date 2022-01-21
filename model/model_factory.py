@@ -2,7 +2,7 @@ import logging
 from .net.resnet import resnet50
 from .net.joint_transformer import JointFromer,JointFromerPCB,OnlyPCB,JointFromerV0_6,JointFromerPCBv2,JointFromerPCBv3
 from .net.transreid import TransReID
-from .net.maskformer import MaskFormer
+from .net.maskformer import MaskFormer, MaskFormer2
 
 __factory_model = {
     'resnet50': resnet50,
@@ -13,7 +13,8 @@ __factory_model = {
     'jointformer_pcb_v3': JointFromerPCBv3,
     'only_pcb': OnlyPCB,
     'jointformerv0.6': JointFromerV0_6,
-    'maskformer': MaskFormer
+    'maskformer': MaskFormer,
+    'maskformer2': MaskFormer2
 }
 
 
