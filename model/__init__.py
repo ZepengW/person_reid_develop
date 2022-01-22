@@ -219,27 +219,39 @@ class ModelManager:
                 q_img_paths += imgs_path
         qf = torch.cat(qf, dim=0)
 
-        logging.info("compute rank list and score")
-        distmat = compute_dis_matrix(qf,gf,self.metrics, self.re_ranking)
+        logging.info("compute dist mat")
+        distmat = compute_dis_matrix(qf, gf, self.metrics)
         # standard mode
         if not is_vis:
             q_img_paths = None
             g_img_paths = None
+        logging.info("compute rank list and score")
         cmc_s, mAP_s, mINP_s, res_vis = eval_func(distmat, qPids, gPids, qCids, gCids,
                                                   q_img_paths=q_img_paths,g_img_paths=g_img_paths)
-        # clothes changing mode
-        # cmc_c, mAP_c, mINP_c = eval_func(distmat, qPids, gPids, qCids, gCids, q_clo_ids=qClothesids,
-        #                                  g_clo_ids=gClothesids)
-        logging.info(f'standard mode test result:[rank-1:{cmc_s[0]:.2%}],[rank-3:{cmc_s[2]:.2%}]'
+        logging.info(f'test result:[rank-1:{cmc_s[0]:.2%}],[rank-3:{cmc_s[2]:.2%}]'
                      f',[rank-5:{cmc_s[4]:.2%}],[rank-10:{cmc_s[9]:.2%}]')
-        logging.info(f'standard mode test result:[mAP:{mAP_s:.2%}],[mINP:{mINP_s:.2%}]')
+        logging.info(f'test result:[mAP:{mAP_s:.2%}],[mINP:{mINP_s:.2%}]')
+        if self.re_ranking:
+            logging.info("compute dist mat (with re-ranking)")
+            distmat = compute_dis_matrix(qf, gf, self.metrics)
+            cmc_s_r, mAP_s_r, mINP_s_r, res_vis_r = eval_func(distmat, qPids, gPids, qCids, gCids,
+                                                      q_img_paths=q_img_paths, g_img_paths=g_img_paths)
+            logging.info("compute rank list and score")
+            logging.info(f'test result(re-ranking):[rank-1:{cmc_s[0]:.2%}],[rank-3:{cmc_s[2]:.2%}]'
+                         f',[rank-5:{cmc_s[4]:.2%}],[rank-10:{cmc_s[9]:.2%}]')
+            logging.info(f'test result(re-ranking):[mAP:{mAP_s:.2%}],[mINP:{mINP_s:.2%}]')
         if self.writer is not None:
-            self.writer.add_scalar('test-standard/rank-1', cmc_s[0], epoch)
-            self.writer.add_scalar('test-standard/mAP', mAP_s, epoch)
-            self.writer.add_scalar('test-standard/mINP', mINP_s, epoch)
+            self.writer.add_scalar('test/rank-1', cmc_s[0], epoch)
+            self.writer.add_scalar('test/mAP', mAP_s, epoch)
+            self.writer.add_scalar('test/mINP', mINP_s, epoch)
+            # re-ranking result
+            if self.re_ranking:
+                self.writer.add_scalar('test/rank-1_reranking', cmc_s_r[0], epoch)
+                self.writer.add_scalar('test/mAP_reranking', mAP_s_r, epoch)
+                self.writer.add_scalar('test/mINP_reranking', mINP_s_r, epoch)
             # feature visualization
             if is_vis:
-                logging.info(f'generate visual result...')
+                logging.info(f'generate visual result (w/o re-rankig)...')
                 features_test = torch.cat([gf.cpu(), qf.cpu()])
                 pids_l = gPids.tolist() + qPids.tolist()
                 features_test, pids_arr = self.filter_feature(features_test,pids_l,self.vis_pid_test)
