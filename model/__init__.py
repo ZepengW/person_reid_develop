@@ -220,7 +220,7 @@ class ModelManager:
         qf = torch.cat(qf, dim=0)
 
         logging.info("compute dist mat")
-        distmat = compute_dis_matrix(qf, gf, self.metrics)
+        distmat = compute_dis_matrix(qf, gf, self.metrics, is_re_ranking = False)
         # standard mode
         if not is_vis:
             q_img_paths = None
