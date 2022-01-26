@@ -237,9 +237,9 @@ class ModelManager:
             cmc_s_r, mAP_s_r, mINP_s_r, res_vis_r = eval_func(distmat, qPids, gPids, qCids, gCids,
                                                       q_img_paths=q_img_paths, g_img_paths=g_img_paths)
             logging.info("compute rank list and score")
-            logging.info(f'test result(re-ranking):[rank-1:{cmc_s[0]:.2%}],[rank-3:{cmc_s[2]:.2%}]'
-                         f',[rank-5:{cmc_s[4]:.2%}],[rank-10:{cmc_s[9]:.2%}]')
-            logging.info(f'test result(re-ranking):[mAP:{mAP_s:.2%}],[mINP:{mINP_s:.2%}]')
+            logging.info(f'test result(re-ranking):[rank-1:{cmc_s_r[0]:.2%}],[rank-3:{cmc_s_r[2]:.2%}]'
+                         f',[rank-5:{cmc_s_r[4]:.2%}],[rank-10:{cmc_s_r[9]:.2%}]')
+            logging.info(f'test result(re-ranking):[mAP:{mAP_s_r:.2%}],[mINP:{mINP_s_r:.2%}]')
         if self.writer is not None:
             self.writer.add_scalar('test/rank-1', cmc_s[0], epoch)
             self.writer.add_scalar('test/mAP', mAP_s, epoch)
