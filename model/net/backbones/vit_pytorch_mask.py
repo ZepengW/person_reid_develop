@@ -36,11 +36,14 @@ def _ntuple(n):
         if isinstance(x, container_abcs.Iterable):
             return x
         return tuple(repeat(x, n))
+
     return parse
+
 
 IMAGENET_DEFAULT_MEAN = (0.485, 0.456, 0.406)
 IMAGENET_DEFAULT_STD = (0.229, 0.224, 0.225)
 to_2tuple = _ntuple(2)
+
 
 def drop_path(x, drop_prob: float = 0., training: bool = False):
     """Drop paths (Stochastic Depth) per sample (when applied in main path of residual blocks).
@@ -61,9 +64,11 @@ def drop_path(x, drop_prob: float = 0., training: bool = False):
     output = x.div(keep_prob) * random_tensor
     return output
 
+
 class DropPath(nn.Module):
     """Drop paths (Stochastic Depth) per sample  (when applied in main path of residual blocks).
     """
+
     def __init__(self, drop_prob=None):
         super(DropPath, self).__init__()
         self.drop_prob = drop_prob
@@ -153,13 +158,13 @@ class AttentionMask(nn.Module):
         B, N, C = x.shape
         # mask shape: [B, N, N]
         qkv = self.qkv(x).reshape(B, N, 3, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4)
-        q, k, v = qkv[0], qkv[1], qkv[2]   # make torchscript happy (cannot use tensor as tuple)
+        q, k, v = qkv[0], qkv[1], qkv[2]  # make torchscript happy (cannot use tensor as tuple)
         # q,k,v shape is [B, self.num_heads, N, C // self.num_heads]
         attn = (q @ k.transpose(-2, -1))
         # attn shape is [B, self.num_heads, N, N]
         if not mask is None:
             # multi mask
-            attn = torch.einsum('bmn,bhmn->bhmn',mask, attn)
+            attn = torch.einsum('bmn,bhmn->bhmn', mask, attn)
         attn = attn * self.scale
         attn = attn.softmax(dim=-1)
         attn = self.attn_drop(attn)
@@ -193,6 +198,7 @@ class Block(nn.Module):
 class PatchEmbed(nn.Module):
     """ Image to Patch Embedding
     """
+
     def __init__(self, img_size=224, patch_size=16, in_chans=3, embed_dim=768):
         super().__init__()
         img_size = to_2tuple(img_size)
@@ -217,6 +223,7 @@ class HybridEmbed(nn.Module):
     """ CNN Feature Map Embedding
     Extract feature map from CNN, flatten, project to embedding dim.
     """
+
     def __init__(self, backbone, img_size=224, feature_size=None, in_chans=3, embed_dim=768):
         super().__init__()
         assert isinstance(backbone, nn.Module)
@@ -257,6 +264,7 @@ class HybridEmbed(nn.Module):
 class PatchEmbed_overlap(nn.Module):
     """ Image to Patch Embedding with overlapping patches
     """
+
     def __init__(self, img_size=224, patch_size=16, stride_size=20, in_chans=3, embed_dim=768):
         super().__init__()
         img_size = to_2tuple(img_size)
@@ -271,8 +279,11 @@ class PatchEmbed_overlap(nn.Module):
         self.num_patches = num_patches
         self.stride_size = stride_size
         self.proj = nn.Conv2d(in_chans, embed_dim, kernel_size=patch_size, stride=stride_size)
-        self.proj_mask_weight = nn.Parameter(torch.ones([1,1,patch_size[0],patch_size[1]]),requires_grad=False)
-        self.cls_mask_padding = nn.ConstantPad2d((1,0,1,0), 1)
+        self.proj_mask_weight = nn.Parameter(torch.ones([1, 1, patch_size[0], patch_size[1]]), requires_grad=False)
+        self.cls_mask_padding = nn.ConstantPad2d((1, 0, 1, 0), 1)
+        # for patch embeding semantic segmentation id:
+        self.bg_max = 0.2
+        self.body_min = 0.8
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
                 n = m.kernel_size[0] * m.kernel_size[1] * m.out_channels
@@ -291,24 +302,37 @@ class PatchEmbed_overlap(nn.Module):
         assert H == self.img_size[0] and W == self.img_size[1], \
             f"Input image size ({H}*{W}) doesn't match model ({self.img_size[0]}*{self.img_size[1]})."
         x = self.proj(x)
-        mask = torch.unsqueeze(mask, dim = 1)  # B, 1, H, W
+        mask = torch.unsqueeze(mask, dim=1)  # B, 1, H, W
         mask = F.conv2d(mask, self.proj_mask_weight, stride=self.stride_size)
-        mask = mask.flatten(2).squeeze(1).unsqueeze(-1)  # B, P, 1
-        mask = mask.repeat(1,1,mask.shape[1])
-        mask_t = mask.permute(0,2,1)
-        dis = torch.abs(mask - mask_t) / (self.patch_size[0] * self.patch_size[1])
-        mask_sim = 1 - dis  # B, P, P
-        mask_sim = self.cls_mask_padding(mask_sim)
-        x = x.flatten(2).transpose(1, 2) # [64, 8, 768]
-        return x, mask_sim
+        mask = mask.flatten(2).squeeze(1)  # B, P
+        mask = mask / (self.patch_size[0] * self.patch_size[1])
+        # generate semantic segmentation id of each patch
+        # 0: background, 1: mix, 2: body
+        ss_id = torch.zeros_like(mask)
+        ss_id = torch.where(mask > self.body_min, torch.tensor(2, dtype=ss_id.dtype).to(ss_id.device), ss_id)
+        ss_id = torch.where((mask <= self.body_min) & (mask >= self.body_min),
+                              torch.tensor(1, dtype=ss_id.dtype).to(ss_id.device), ss_id)
+        # compute patch distance
+        mask = mask.unsqueeze(-1)  # B, P, 1
+        mask = mask.repeat(1, 1, mask.shape[1])
+        mask_t = mask.permute(0, 2, 1)
+        dis = torch.abs(mask - mask_t)
+        patch_sim = 1 - dis  # B, P, P
+        patch_sim = self.cls_mask_padding(patch_sim)
+        x = x.flatten(2).transpose(1, 2)  # [64, 8, 768]
+        return x, patch_sim, ss_id
 
 
 class TransReIDMask(nn.Module):
     """ Transformer-based Object Re-Identification
     """
-    def __init__(self, img_size=224, patch_size=16, stride_size=16, in_chans=3, num_classes=1000, embed_dim=768, depth=12,
-                 num_heads=12, mlp_ratio=4., qkv_bias=False, qk_scale=None, drop_rate=0., attn_drop_rate=0., camera=0, view=0,
-                 drop_path_rate=0., hybrid_backbone=None, norm_layer=nn.LayerNorm, local_feature=False, sie_xishu =1.0):
+
+    def __init__(self, img_size=224, patch_size=16, stride_size=16, in_chans=3, num_classes=1000, embed_dim=768,
+                 depth=12,
+                 num_heads=12, mlp_ratio=4., qkv_bias=False, qk_scale=None, drop_rate=0., attn_drop_rate=0., camera=0,
+                 view=0,
+                 drop_path_rate=0., hybrid_backbone=None, norm_layer=nn.LayerNorm, local_feature=False, sie_xishu=1.0,
+                 is_ss_embed=True):
         super().__init__()
         self.num_classes = num_classes
         self.num_features = self.embed_dim = embed_dim  # num_features for consistency with other models
@@ -344,7 +368,11 @@ class TransReIDMask(nn.Module):
             trunc_normal_(self.sie_embed, std=.02)
             print('viewpoint number is : {}'.format(view))
             print('using SIE_Lambda is : {}'.format(sie_xishu))
-
+        self.is_ss_embed = is_ss_embed
+        if self.is_ss_embed:
+            # '3' means: patch is body(2) or background(0), or mix(1)
+            self.ss_embed = nn.Parameter(torch.zeros(3, embed_dim))
+            trunc_normal_(self.ss_embed, std=.02)
         print('using drop_out rate is : {}'.format(drop_rate))
         print('using attn_drop_out rate is : {}'.format(attn_drop_rate))
         print('using drop_path rate is : {}'.format(drop_path_rate))
@@ -389,7 +417,7 @@ class TransReIDMask(nn.Module):
 
     def forward_features(self, x, mask, camera_id, view_id):
         B = x.shape[0]
-        x, mask = self.patch_embed(x, mask)
+        x, mask, patch_ss_id = self.patch_embed(x, mask)
 
         cls_tokens = self.cls_token.expand(B, -1, -1)  # stole cls_tokens impl from Phil Wang, thanks
         x = torch.cat((cls_tokens, x), dim=1)
@@ -402,6 +430,9 @@ class TransReIDMask(nn.Module):
             x = x + self.pos_embed + self.sie_xishu * self.sie_embed[view_id]
         else:
             x = x + self.pos_embed
+
+        if self.is_ss_embed:
+            x = x + self.gen_ss_embed(patch_ss_id)
 
         x = self.pos_drop(x)
 
@@ -421,6 +452,14 @@ class TransReIDMask(nn.Module):
     def forward(self, x, mask, cam_label=None, view_label=None):
         x = self.forward_features(x, mask, cam_label, view_label)
         return x
+
+    def gen_ss_embed(self, ss_id):
+        B, P = ss_id.shape
+        cls_token_ss = torch.ones([B,1]).to(ss_id.device)    # cls token ss id = mix(1)
+        ss_id = torch.cat([cls_token_ss, ss_id], dim = 1).long()
+        patch_ss_embed = self.ss_embed[ss_id.reshape(-1)]
+        patch_ss_embed = patch_ss_embed.reshape(B, 1+P, -1)
+        return patch_ss_embed
 
     def load_param(self, model_path):
         param_dict = torch.load(model_path, map_location='cpu')
@@ -445,7 +484,9 @@ class TransReIDMask(nn.Module):
                 self.state_dict()[k].copy_(v)
             except:
                 print('===========================ERROR=========================')
-                print('shape do not match in k :{}: param_dict{} vs self.state_dict(){}'.format(k, v.shape, self.state_dict()[k].shape))
+                print('shape do not match in k :{}: param_dict{} vs self.state_dict(){}'.format(k, v.shape,
+                                                                                                self.state_dict()[
+                                                                                                    k].shape))
 
 
 def resize_pos_embed(posemb, posemb_new, hight, width):
@@ -457,38 +498,14 @@ def resize_pos_embed(posemb, posemb_new, hight, width):
     ntok_new -= 1
 
     gs_old = int(math.sqrt(len(posemb_grid)))
-    print('Resized position embedding from size:{} to size: {} with height:{} width: {}'.format(posemb.shape, posemb_new.shape, hight, width))
+    print('Resized position embedding from size:{} to size: {} with height:{} width: {}'.format(posemb.shape,
+                                                                                                posemb_new.shape, hight,
+                                                                                                width))
     posemb_grid = posemb_grid.reshape(1, gs_old, gs_old, -1).permute(0, 3, 1, 2)
     posemb_grid = F.interpolate(posemb_grid, size=(hight, width), mode='bilinear')
     posemb_grid = posemb_grid.permute(0, 2, 3, 1).reshape(1, hight * width, -1)
     posemb = torch.cat([posemb_token, posemb_grid], dim=1)
     return posemb
-
-
-def vit_base_patch16_224_TransReID(img_size=(256, 128), stride_size=16, drop_rate=0.0, attn_drop_rate=0.0, drop_path_rate=0.1, camera=0, view=0,local_feature=False,sie_xishu=1.5, **kwargs):
-    model = TransReID(
-        img_size=img_size, patch_size=16, stride_size=stride_size, embed_dim=768, depth=12, num_heads=12, mlp_ratio=4, qkv_bias=True,\
-        camera=camera, view=view, drop_path_rate=drop_path_rate, drop_rate=drop_rate, attn_drop_rate=attn_drop_rate,
-        norm_layer=partial(nn.LayerNorm, eps=1e-6),  sie_xishu=sie_xishu, local_feature=local_feature, **kwargs)
-
-    return model
-
-def vit_small_patch16_224_TransReID(img_size=(256, 128), stride_size=16, drop_rate=0., attn_drop_rate=0.,drop_path_rate=0.1, camera=0, view=0, local_feature=False, sie_xishu=1.5, **kwargs):
-    kwargs.setdefault('qk_scale', 768 ** -0.5)
-    model = TransReID(
-        img_size=img_size, patch_size=16, stride_size=stride_size, embed_dim=768, depth=8, num_heads=8,  mlp_ratio=3., qkv_bias=False, drop_path_rate = drop_path_rate,\
-        camera=camera, view=view,  drop_rate=drop_rate, attn_drop_rate=attn_drop_rate,
-        norm_layer=partial(nn.LayerNorm, eps=1e-6),  sie_xishu=sie_xishu, local_feature=local_feature, **kwargs)
-
-    return model
-
-def deit_small_patch16_224_TransReID(img_size=(256, 128), stride_size=16, drop_path_rate=0.1, drop_rate=0.0, attn_drop_rate=0.0, camera=0, view=0, local_feature=False, sie_xishu=1.5, **kwargs):
-    model = TransReID(
-        img_size=img_size, patch_size=16, stride_size=stride_size, embed_dim=384, depth=12, num_heads=6, mlp_ratio=4, qkv_bias=True,
-        drop_path_rate=drop_path_rate, drop_rate=drop_rate, attn_drop_rate=attn_drop_rate, camera=camera, view=view, sie_xishu=sie_xishu, local_feature=local_feature,
-        norm_layer=partial(nn.LayerNorm, eps=1e-6), **kwargs)
-
-    return model
 
 
 def _no_grad_trunc_normal_(tensor, mean, std, a, b):
@@ -500,7 +517,7 @@ def _no_grad_trunc_normal_(tensor, mean, std, a, b):
 
     if (mean < a - 2 * std) or (mean > b + 2 * std):
         print("mean is more than 2 std from [a, b] in nn.init.trunc_normal_. "
-                      "The distribution of values may be incorrect.",)
+              "The distribution of values may be incorrect.", )
 
     with torch.no_grad():
         # Values are generated by using a truncated uniform distribution and
