@@ -4,7 +4,7 @@ this file contains method of reading dataset
 from PIL import Image
 import logging
 import os
-from dataset.transforms import build_transforms, build_transorms_shape, build_transorms_value
+from dataset.transforms import build_transforms, build_transorms_shape, build_transorms_value, build_transforms_bgerase
 import torch
 import numpy as np
 import torchvision.transforms as T
@@ -73,7 +73,7 @@ class GetImgWithSem(object):
     resize them to uniform size
     """
 
-    def __init__(self, **kwargs):
+    def __init__(self, using_bg_erase = False, **kwargs):
         self.img_size = kwargs.get('image_size', [256, 128])
         self.mode = kwargs.get('mode', 'train')
         padding = kwargs.get('padding', 10)
@@ -82,7 +82,13 @@ class GetImgWithSem(object):
         re_prob = kwargs.get('re_prob', 0.5)
         pixel_mean = kwargs.get('pixel_mean', [0.485, 0.456, 0.406])
         pixel_std = kwargs.get('pixel_std', [0.229, 0.224, 0.225])
-        self.tf_value = build_transorms_value(mode = self.mode, re_prob = re_prob, pixel_mean = pixel_mean, pixel_std = pixel_std)
+        self.using_bg_erase = using_bg_erase
+        if using_bg_erase:
+            self.tf_value = build_transorms_value(mode = '', re_prob = re_prob, pixel_mean = pixel_mean, pixel_std = pixel_std)
+            self.tf_erase = build_transforms_bgerase(mode = self.mode, re_prob = re_prob)
+        else:
+            self.tf_value = build_transorms_value(mode = self.mode, re_prob = re_prob, pixel_mean = pixel_mean, pixel_std = pixel_std)
+
         self.to_tensor = T.ToTensor()
 
     def __call__(self, data: dict):
@@ -106,7 +112,10 @@ class GetImgWithSem(object):
         ss = torch.unsqueeze(ss, dim=0)
         reshape_data = self.tf_shape(torch.cat([img, ss], dim=0))
         img = reshape_data[0:3]
-        img = self.tf_shape(img)
+        img = self.tf_value(img)
+        if self.using_bg_erase and self.mode == 'train':
+            img = self.tf_erase(torch.cat[img, ss], dim = 0)
+
         ss = reshape_data[3]
         # pre transforms
         data_dict = {'img': img, 'pid': pid, 'camera_id': cid, 'ss': ss, 'img_path': img_path}
