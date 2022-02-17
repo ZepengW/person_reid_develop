@@ -112,11 +112,10 @@ class GetImgWithSem(object):
         ss = torch.unsqueeze(ss, dim=0)
         reshape_data = self.tf_shape(torch.cat([img, ss], dim=0))
         img = reshape_data[0:3]
+        ss = reshape_data[3]
         img = self.tf_value(img)
         if self.using_bg_erase and self.mode == 'train':
-            img = self.tf_erase(torch.cat[img, ss], dim = 0)
-
-        ss = reshape_data[3]
+            img = self.tf_erase(torch.cat([img, ss.unsqueeze(0)], dim = 0))
         # pre transforms
         data_dict = {'img': img, 'pid': pid, 'camera_id': cid, 'ss': ss, 'img_path': img_path}
         return data_dict

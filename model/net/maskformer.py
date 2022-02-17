@@ -193,13 +193,14 @@ class MaskFormer2(nn.Module):
                  drop_path_rate=0.1, drop_rate=0.0, attn_drop_rate=0.0,
                  sie_xishu=3.0, shuffle_groups=2, shift_num=5,
                  divide_length=4, rearrange=True, inplanes = 768,
+                 is_ss_embed = False,
                  **kwargs
                  ):
         super().__init__()
         self.base = TransReIDMask(
             img_size=img_size, patch_size=16, stride_size=stride_size, embed_dim=768, depth=12, num_heads=12,
             mlp_ratio=4, qkv_bias=True, camera=num_camera, drop_path_rate=drop_path_rate, drop_rate=drop_rate, attn_drop_rate=attn_drop_rate,
-            norm_layer=partial(nn.LayerNorm, eps=1e-6), sie_xishu=sie_xishu, local_feature=True)
+            norm_layer=partial(nn.LayerNorm, eps=1e-6), sie_xishu=sie_xishu, local_feature=True, is_ss_embed=is_ss_embed)
         if not vit_pretrained_path is None:
             self.base.load_param(vit_pretrained_path)
         block = self.base.blocks[-1]

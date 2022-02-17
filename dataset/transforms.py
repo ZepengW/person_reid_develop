@@ -95,7 +95,7 @@ class RandomEraseBackground(object):
         img_mask = img[3]
         img_human = torch.einsum('chw, hw->chw',img_rgb, img_mask)
         if random.random() > self.probability:
-            return
+            return img_rgb
         area = img_h * img_w
         count = self.min_count if self.min_count == self.max_count else \
             random.randint(self.min_count, self.max_count)
@@ -108,22 +108,22 @@ class RandomEraseBackground(object):
                 if w < img_w and h < img_h:
                     top = random.randint(0, img_h - h)
                     left = random.randint(0, img_w - w)
-                    img[:, top:top + h, left:left + w] = r_e._get_pixels(
+                    img_rgb[:, top:top + h, left:left + w] = r_e._get_pixels(
                         self.per_pixel, self.rand_color, (chan, h, w),
                         dtype=dtype, device=self.device)
                     break
-        return torch.where(img_human == 0, img, img_human)
+        return torch.where(img_human == 0, img_rgb, img_human)
 
     def __call__(self, input):
         if len(input.size()) == 3:
-            output = self._erase(input, *input.size(), input.dtype)
+            output = self._erase(input, 3, input.shape[1], input.shape[2], input.dtype)
         else:
             batch_size, chan, img_h, img_w = input.size()
             output = []
             # skip first slice of batch if num_splits is set (for clean portion of samples)
             batch_start = batch_size // self.num_splits if self.num_splits > 1 else 0
             for i in range(batch_start, batch_size):
-                output.append(self._erase(input[i], chan, img_h, img_w, input.dtype))
+                output.append(self._erase(input[i], 3, img_h, img_w, input.dtype))
             output =  torch.cat(output, dim = 0)
         return output
         
