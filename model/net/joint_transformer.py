@@ -841,3 +841,116 @@ class JointFromerPCBv3(nn.Module):
             return score_cls, feats_whole
         else:
             return feats_whole
+
+
+class JointFromerPCBv4(nn.Module):
+    '''
+    Joint Transformer using PCB to generate feature map
+        for each feature patches according to the joint position
+        use quality to weight total feature
+    '''
+
+    def __init__(self, num_classes, vit_pretrained_path=None, parts=6, in_planes=768,
+                 pretrained=True, use_heatmap = True, l2_norm = False, **kwargs):
+        super(JointFromerPCBv4, self).__init__()
+        self.parts = parts
+        self.num_classes = num_classes
+        self.in_planes = in_planes
+        self.l2_norm = l2_norm
+        self.mold = kwargs.get('mold', 100)
+        # extract feature
+        self.feature_map_extract = PCB_Feature(block=Bottleneck, layers=[3, 4, 6, 3], pretrained=pretrained)
+        # patch embeding
+        self.downsample = nn.Conv2d(2048, in_planes, kernel_size=1)
+        # vit backbone network
+        self.transformer = TransReID(num_classes=num_classes, num_patches=parts, embed_dim=self.in_planes, depth=12,
+                                     num_heads=12, mlp_ratio=4, qkv_bias=True)
+        if not vit_pretrained_path is None:
+            self.transformer.load_param(vit_pretrained_path)
+        # classify layer
+        # verify the vilidation of heatmap
+        self.use_heatmap = use_heatmap
+        # compute quality score of patches
+        self.quality_predictor = nn.Sequential(
+            nn.Conv2d(in_planes, 1, 1),
+            nn.BatchNorm2d(1),
+            nn.Sigmoid()
+        )
+
+        if self.parts == 3:
+            self.parts_id = [
+                torch.tensor([0, 14, 15, 16, 17]),  # head
+                torch.tensor([1, 2, 3, 4, 5, 6, 7, 8, 11]),  # upper body
+                torch.tensor([8, 9, 10, 11, 12, 13])  # lower body
+            ]
+        elif self.parts == 6:
+            self.parts_id = [
+                torch.tensor([0, 14, 15, 16, 17]),  # head
+                torch.tensor([1, 2, 5, 8, 11]),   # upper body
+                torch.tensor([2, 3, 4]),    # right arm
+                torch.tensor([5, 6, 7]),    # left arm
+                torch.tensor([8, 9, 10]),   # right leg
+                torch.tensor([11, 12, 13])  # left leg
+            ]
+        elif self.parts == 0:
+            self.parts_id = []
+        else:
+            logging.error(f'Unsupport Parts Mode:{self.parts_mode}')
+            return
+        self.fuse_heatmap = torch.nn.AdaptiveMaxPool1d(1)
+
+        self.classify = nn.Linear(self.in_planes, self.num_classes, bias=False)
+
+    def forward(self, img, heatmap):
+        B = img.shape[0]
+        # extract feature
+        feat_map = self.feature_map_extract(img)
+        feat_map = self.downsample(feat_map)
+
+        # generate patch
+        if self.use_heatmap:
+            heatmap_fuse = []
+            for ids in self.parts_id:
+                heatmap_part = heatmap[:, ids]
+                b,p,h,w = heatmap_part.shape
+                heatmap_part = heatmap_part.reshape([b,p,h*w])
+                heatmap_part = heatmap_part.permute([0, 2, 1])
+                heatmap_part = self.fuse_heatmap(heatmap_part) # shape: b,h*w,1
+                heatmap_part = heatmap_part.squeeze() # shape: b,h*w
+                heatmap_part = heatmap_part.reshape([b,1,h,w])
+                heatmap_fuse.append(heatmap_part)
+            heatmap_fuse = torch.cat(heatmap_fuse, dim = 1) # shape: b,len(self.parts_id),24,8
+            heatmap_fuse = heatmap_fuse.float()
+            feat_map = torch.einsum('bphw,bchw->bpc',heatmap_fuse, feat_map)
+            feat_map = feat_map / (heatmap_fuse.shape[2] * heatmap_fuse.shape[3])
+            zero_patch_index = torch.sum(feat_map, dim = 2) == 0
+            zero_patch_index = zero_patch_index.unsqueeze(-1).repeat(1,1,feat_map.shape[2])
+            noise = torch.randn_like(feat_map)
+            feat_patch = torch.where(zero_patch_index, noise, feat_map)
+        else:
+            # random sample feat_patch
+            feat_map = torch.reshape(feat_map,[feat_map.shape[0], feat_map.shape[1], -1]) #feat map's shape : b, c, fh*fw
+            feat_map = feat_map.permute([0, 2, 1])  #feat map's shape : b, fh*fw, c
+            feat_patch_index = torch.LongTensor(random.sample(range(feat_map.shape[1]), self.parts))
+            feat_patch = feat_map[:,feat_patch_index]
+
+        # transformer
+        feats = self.transformer(feat_patch)
+        # compute patch quality
+        B,P,C = feat_patch.shape
+        feat_patch = feat_patch.reshape([-1, C])
+        feat_patch = feat_patch.unsqueeze(-1).unsqueeze(-1) # B*P, C, 1, 1
+        q_patches = self.quality_predictor(feat_patch)  # B*P, 1, 1, 1
+        q_patches = q_patches.reshape([B,P])    # B, P
+
+        
+        feat_patches = feats[:, 1:]   # B, P, C
+        feats = torch.einsum('bpc, bp->bc', feat_patches, q_patches)
+        if self.l2_norm:
+            feats = feats / torch.norm(feats) * self.mold
+        # output
+        if self.training:
+            score = self.classify(feats)
+            return score, feats
+        else:
+            return feats
