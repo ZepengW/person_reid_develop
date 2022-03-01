@@ -46,7 +46,10 @@ class ModelManager:
                 self.trained_epoches = self.load_model(self.net, cfg.get('save_name','model-no-name'))
 
         # loss function
-        self.lossesFunction = make_loss(cfg.get('loss'), num_classes = class_num)
+        if(cfg.get('use_model_loss', False)):
+            self.lossesFunction = self.net.get_loss
+        else:
+            self.lossesFunction = make_loss(cfg.get('loss'), num_classes = class_num)
 
         # optim
         self.optimizer, _ = solver.make_optimizer(cfg_solver=cfg.get('solver'), model=self.net)
