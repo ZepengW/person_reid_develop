@@ -4,12 +4,14 @@
 # --------------------------------------------------------
 
 from functools import partial
+from re import I
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from timm.models.layers import trunc_normal_
 from model.net.backbones.vision_transformer import VisionTransformer
+from loss.triplet_loss import TripletLoss
 import logging
 
 
@@ -56,7 +58,7 @@ class VisionTransformerForSimMIM(VisionTransformer):
 
 
 class SimMIM(nn.Module):
-    def __init__(self, encoder: str, encoder_stride, **kwargs):
+    def __init__(self, num_classes, encoder: str, encoder_stride, **kwargs):
         super().__init__()
         encoder = encoder.upper()
         if 'VIT' == encoder:
@@ -88,18 +90,38 @@ class SimMIM(nn.Module):
                 out_channels=self.encoder_stride ** 2 * 3, kernel_size=1),
             nn.PixelShuffle(self.encoder_stride),
         )
+        #self.feat_extractor = nn.Conv2d()
+        self.pooling = nn.AdaptiveMaxPool2d(1)
+        self.classify = nn.Linear(self.encoder.num_features, num_classes)
 
         self.in_chans = self.encoder.in_chans
         self.patch_size = self.encoder.patch_size
 
-    def forward(self, x, mask):
-        z = self.encoder(x, mask)
-        x_rec = self.decoder(z)
+        self.loss_name_list = ['mim', 'cross_entropy', 'triplet']
+        self.triplet_f = TripletLoss()
+        self.xent_f = nn.CrossEntropyLoss()
 
-        mask = mask.repeat_interleave(self.patch_size, 1).repeat_interleave(self.patch_size, 2).unsqueeze(1).contiguous()
-        loss_recon = F.l1_loss(x, x_rec, reduction='none')
-        self.loss = (loss_recon * mask).sum() / (mask.sum() + 1e-5) / self.in_chans
-        return x_rec
+    def forward(self, img, mask, pid):
+        z = self.encoder(img, mask)
+        x_rec = self.decoder(z)
+        f = self.pooling(z)
+        f = f.squeeze(-1)
+        f = f.squeeze(-1)
+        s = self.classify(f)
+
+        if self.training:
+            # compute loss
+            mask = mask.repeat_interleave(self.patch_size, 1).repeat_interleave(self.patch_size, 2).unsqueeze(1).contiguous()
+            loss_recon = F.l1_loss(img, x_rec, reduction='none')
+            loss_recon = (loss_recon * mask).sum() / (mask.sum() + 1e-5) / self.in_chans
+            
+            loss_triplet = self.triplet_f(f, pid)
+            loss_xent = self.xent_f(s, pid)
+            self.loss = loss_recon + loss_xent + loss_triplet
+            self.loss_value_list = [float(loss_recon.cpu()), float(loss_xent.cpu()), float(loss_triplet.cpu())]
+            return s, f
+        else:
+            return f
     
     def get_loss(self, *wargs):
         return self.loss, self.loss_value_list, self.loss_name_list

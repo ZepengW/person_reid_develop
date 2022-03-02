@@ -4,6 +4,7 @@ from .net.joint_transformer import JointFromer,JointFromerPCB,OnlyPCB,JointFrome
 from .net.joint_transformer import JointFromerPCBv4
 from .net.transreid import TransReID
 from .net.maskformer import MaskFormer, MaskFormer2
+from .net.simmim import SimMIM
 
 __factory_model = {
     'resnet50': resnet50,
@@ -16,7 +17,8 @@ __factory_model = {
     'only_pcb': OnlyPCB,
     'jointformerv0.6': JointFromerV0_6,
     'maskformer': MaskFormer,
-    'maskformer2': MaskFormer2
+    'maskformer2': MaskFormer2,
+    'simmim': SimMIM
 }
 
 

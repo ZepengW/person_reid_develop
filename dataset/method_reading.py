@@ -119,3 +119,72 @@ class GetImgWithSem(object):
         # pre transforms
         data_dict = {'img': img, 'pid': pid, 'camera_id': cid, 'ss': ss, 'img_path': img_path}
         return data_dict
+
+
+class GetImgWithRandomMask(object):
+    """
+    read img data from img path
+    generate mask randomly
+    """
+
+    def __init__(self, using_bg_erase = False, **kwargs):
+        self.img_size = kwargs.get('image_size', [256, 128])
+        self.mode = kwargs.get('mode', 'train')
+        padding = kwargs.get('padding', 10)
+        flip_prob = kwargs.get('flip_prob', 0.5)
+        self.tf_shape = build_transorms_shape(self.img_size, self.mode, padding = padding, flip_prob = flip_prob)
+        re_prob = kwargs.get('re_prob', 0.5)
+        pixel_mean = kwargs.get('pixel_mean', [0.485, 0.456, 0.406])
+        pixel_std = kwargs.get('pixel_std', [0.229, 0.224, 0.225])
+        self.using_bg_erase = using_bg_erase
+        self.tf_value = build_transorms_value(mode = self.mode, re_prob = re_prob, pixel_mean = pixel_mean, pixel_std = pixel_std)
+        self.mask_generator = MaskGenerator(
+            input_size=self.img_size[0],
+            mask_patch_size=32,
+            model_patch_size=16,
+            mask_ratio=0.6,
+        )
+        self.to_tensor = T.ToTensor()
+
+    def __call__(self, data: dict):
+        img_path = data.get('img_path')
+        pid = data.get('pid')
+        cid = data.get('cid')
+        if not os.path.isfile(img_path):
+            logging.error(f'Can Not Read Image {img_path}')
+            raise Exception
+        else:
+            img = Image.open(img_path).convert('RGB')
+            img = self.to_tensor(img)
+        img = self.tf_value(self.tf_shape(img))
+        mask = self.mask_generator()
+        # pre transforms
+        data_dict = {'img': img, 'pid': pid, 'camera_id': cid, 'mask': mask, 'img_path': img_path}
+        return data_dict
+
+
+class MaskGenerator:
+    def __init__(self, input_size=224, mask_patch_size=32, model_patch_size=4, mask_ratio=0.6):
+        self.input_size = input_size
+        self.mask_patch_size = mask_patch_size
+        self.model_patch_size = model_patch_size
+        self.mask_ratio = mask_ratio
+        
+        assert self.input_size % self.mask_patch_size == 0
+        assert self.mask_patch_size % self.model_patch_size == 0
+        
+        self.rand_size = self.input_size // self.mask_patch_size
+        self.scale = self.mask_patch_size // self.model_patch_size
+        
+        self.token_count = self.rand_size ** 2
+        self.mask_count = int(np.ceil(self.token_count * self.mask_ratio))
+        
+    def __call__(self):
+        mask_idx = np.random.permutation(self.token_count)[:self.mask_count]
+        mask = np.zeros(self.token_count, dtype=int)
+        mask[mask_idx] = 1
+        
+        mask = mask.reshape((self.rand_size, self.rand_size))
+        mask = mask.repeat(self.scale, axis=0).repeat(self.scale, axis=1)
+        
+        return mask
