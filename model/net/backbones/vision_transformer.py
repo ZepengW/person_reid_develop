@@ -216,8 +216,9 @@ class VisionTransformer(nn.Module):
                  num_heads=12, mlp_ratio=4., qkv_bias=False, qk_scale=None, drop_rate=0., attn_drop_rate=0.,
                  drop_path_rate=0., norm_layer=nn.LayerNorm, init_values=None,
                  use_abs_pos_emb=True, use_rel_pos_bias=False, use_shared_rel_pos_bias=False,
-                 use_mean_pooling=True, init_scale=0.001):
+                 use_mean_pooling=True, init_scale=0.001, extract_feature = False):
         super().__init__()
+        self.extract_feature = extract_feature
         self.num_classes = num_classes
         self.num_features = self.embed_dim = embed_dim
         self.patch_size = patch_size
@@ -323,9 +324,10 @@ class VisionTransformer(nn.Module):
             return x[:, 0]
 
     def forward(self, x):
-        x = self.forward_features(x)
-        x = self.head(x)
-        return x
+        f = self.forward_features(x)
+        x = self.head(f)
+        if self.extract_feature:
+            return x, f
 
 
 def build_vit(config):
