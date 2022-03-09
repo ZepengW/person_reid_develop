@@ -1,0 +1,67 @@
+gpu: [0]
+eval_interval: 10 # eval each [eval_interval]
+
+
+model-manager:
+  network_name: predict_jointformer # the network model
+#  network-params: # the params used to create model
+#    pretrained: True
+  network_inputs: ['img','hm', 'vis_score'] # the data dict keys which the network input
+  save_name: model  # final model save name is [save_name]_[epoch].pkl
+  #load_path: ./output/test.pkl   # load from './output/test.pkl'
+  #load_path: True        # auto load model with [save_name]
+  #load_path: False       # Do Not Load
+  solver:
+    optimizer: SGD
+    base_lr: 0.0001
+    weight_decay: 0.0003
+    warmup_epochs: 5
+    max_epoch: 120
+  loss:
+    use_loss: ['cross_entropy','triplet']    # loss used for backward
+    wrt:    # loss wrt params
+      weight: 1.0     # loss weight in total loss
+      except_input: 'feature'     # except input tensor type
+    xent_label_smooth:     # loss xent_label_smooth params
+      weight: 1.0
+      params_initial: ['num_classes']     # params used for initialize the loss object
+      except_input: 'score'       # except input tensor type
+    triplet:
+      weight: 1.0
+      except_input: 'feature'
+    cross_entropy:
+      weight: 1.0
+      except_input: 'score'       # except input tensor type
+  # use for visulize feature distribution
+  # vis_pid_[test/train] can be int or list
+  # int: random select [vis_pid_train/test] pids' samples for visualization
+  # list: select pids' samples which in [vis_pid_train/test] list for visualization
+  vis_pid_train: 30
+  vis_pid_test: 30
+
+dataset:
+  dataset_name: duke
+  dataset_path: ../dataset/DukeMTMC-reID
+  image_size:
+    - 256
+    - 128
+  num_workers: 8
+  batch_size_train: 512
+  batch_size_test: 512
+  num_instance: 4
+  type: image
+  # reading method
+  reading_method_train:
+    name: get_img_hm
+    # define other parameter, such as image size
+    image_size: [256, 128]
+  reading_method_test:
+    name: get_img_hm
+    # define other parameter, such as image size
+    image_size: [256, 128]
+
+vis_params: # vis in tensorboardx
+  vis: False       # visualize feature distribution
+  vis_interval: 20  # visualization each [vis_interval]
+  vis_img_func: list_false  # support: random, list_false, all
+  vis_img_num: 100          # only valid in vis_img_func = random

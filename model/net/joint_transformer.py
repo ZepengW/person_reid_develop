@@ -1,12 +1,15 @@
+from turtle import forward
 import torch.nn as nn
 from model.net.backbones.vit_pytorch import vit_base_patch16_224_TransReID
 from model.net.backbones.resnet import ResNet, Bottleneck
 from model.net.backbones.pcb import OSBlock, Pose_Subnet, PCB_Feature
 from model.net.backbones.vit_pytorch import TransReID
+from model.net.backbones.vision_transformer import VisionTransformerForJoint
 import copy
 import torch
 import logging
 import random
+from functools import partial
 
 def weights_init_kaiming(m):
     classname = m.__class__.__name__
@@ -954,3 +957,56 @@ class JointFromerPCBv4(nn.Module):
             return score, feats
         else:
             return feats
+
+
+class PredictJointFormer(nn.Module):
+    # Jointforer, using Sim MIM to predict unseened body joint position feature
+    def __init__(self, num_classes, vit_pretrained_path=None, in_planes=768, pretrained=True, patch_size=[30,30], **kwargs):
+        super(PredictJointFormer, self).__init__()
+        self.num_classes = num_classes
+        self.in_planes = in_planes
+        # heatmap patch 
+        self.pooling = nn.AvgPool2d(patch_size, stride=patch_size)
+        self.embeding = nn.Conv2d(3, in_planes, patch_size, stride=patch_size)
+        # vit backbone network
+        self.transformer = VisionTransformerForJoint(
+            num_classes=num_classes,
+            embed_dim=self.in_planes,
+            depth=kwargs.get('depth', 12),
+            num_heads=kwargs.get('num_heads', 12),
+            mlp_ratio=kwargs.get('mul_ratio', 4),
+            qkv_bias=kwargs.get('qkv_bias', True),
+            drop_rate=kwargs.get('drop_rate', 0.0),
+            drop_path_rate=kwargs.get('drop_path_rate', 0.1),
+            norm_layer=partial(nn.LayerNorm, eps=1e-6),
+            init_values=kwargs.get('init_values', 0.1),
+            use_abs_pos_emb=kwargs.get('use_ape', False),
+            use_rel_pos_bias=kwargs.get('use_rpb', True),
+            use_mean_pooling=kwargs.get('use_mean_pooling', True)
+        )
+
+
+    def forward(self, img, hm, vis_score):
+        # img shape: B, 3, H, W
+        # hm shape: B, 18, H, W
+        B, V, H, W = hm.shape
+        hm = self.pooling(hm)
+        img = self.embeding(img)
+
+        # patch selector
+        hm = hm.reshape([B, V, -1])
+        img = img.reshape([B, img.shape[1], -1])
+        img = img.permute([0,2,1])  # B, N, Dim
+        body_feat_idx = torch.argmax(hm, dim =2) # B, V
+        patch_feat = torch.einsum('bnd,bv->bvd', img, body_feat_idx)
+
+        # backbone transformer
+        s,f = self.transformer(patch_feat, vis_score)
+        if self.training:
+            return f
+        return s, f
+
+
+
+
+    

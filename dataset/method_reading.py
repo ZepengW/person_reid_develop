@@ -9,6 +9,7 @@ import torch
 import numpy as np
 import torchvision.transforms as T
 import json
+from scipy.ndimage.filters import gaussian_filter
 
 
 class GetImg(object):
@@ -158,15 +159,19 @@ class GetImgWithHm(object):
         else:
             img = Image.open(img_path).convert('RGB')
             img = self.to_tensor(img)
-            hm = genHeatMap(json_path, img.shape[1], img.shape[2], self.vis_thre)
+            hm, vis_score = genHeatMap(json_path, img.shape[1], img.shape[2])
             hm = torch.tensor(hm)
+            vis_score = torch.tensor(vis_score)
 
         reshape_data = self.tf_shape(torch.cat([img, hm], dim=0))
         img = reshape_data[0:3]
         hm = reshape_data[3:]
         img = self.tf_value(img)
         # pre transforms
-        data_dict = {'img': img, 'pid': pid, 'camera_id': cid, 'hm': hm, 'img_path': img_path}
+        img = img.float()
+        hm = hm.float()
+        vis_score = vis_score.float()
+        data_dict = {'img': img, 'pid': pid, 'camera_id': cid, 'hm': hm, 'img_path': img_path, 'vis_score': vis_score}
         return data_dict
 
 
@@ -239,31 +244,41 @@ class MaskGenerator:
         return mask
 
 
-def genHeatMap(json_path, imgh, imgw, vis_thre = 0.2):
-    with open(json_path,'r') as f:
-        a=json.load(f)
-        p=a['people']
-    p_count=0
+def genHeatMap(json_path, imgh, imgw):
+    if os.path.isfile(json_path):
+        with open(json_path,'r') as f:
+            a=json.load(f)
+            p=a['people']
+    else:
+        hm = np.zeros([18, imgh, imgw])
+        vis_score = np.zeros([18])
+        return hm, vis_score
+    
+    vis_score_value_max = -1
+    vis_score_select = np.zeros([18])
+    p_points_select = np.zeros([18, 3])
     for i in range(len(p)):
         p_points=p[i]
         p_points=p_points['pose_keypoints_2d']
         p_points=np.array(p_points)
         p_points=p_points.reshape(18,3)
-        pp=p_points
-        pp[pp[:,2]<=vis_thre]=0.
-        p_points=p_points[p_points[:,2]>vis_thre]
-        count=p_points.shape[0]
-        if count>p_count:
-            final_point=p_points
-            final_p=pp
-            p_count=count
-    hm = np.zeros([18, imgh, imgw])
-    for j in range(final_p.shape[0]):
-        if final_p[j].all()!=0.:
-            w,h = final_p[j][:2]
-            w,h=int(w),int(h)
-            hm[j]=CenterGaussianHeatMap(imgh,imgw,w,h,(imgh*imgw/1000.))
-    return hm
+        vis_score =p_points[:,2]
+
+        # get vis_score_value is max
+        vis_score_value = vis_score.sum()
+        if vis_score_value > vis_score_value_max:
+            vis_score_value_max = vis_score_value
+            p_points_select = p_points
+            vis_score_select = vis_score
+
+    hm = np.zeros([p_points_select.shape[0], imgh, imgw])
+    for j in range(p_points_select.shape[0]):
+        w,h = p_points_select[j][:2]
+        w,h=int(w),int(h)
+        hm[j][min(h,imgh-1)][min(w, imgw-1)] = vis_score_select[j]
+        hm[j] = gaussian_filter(hm[j],[3,1.5],mode='wrap')
+        #hm[j]=CenterGaussianHeatMap(imgh,imgw,w,h,(imgh*imgw/1000.))
+    return hm, vis_score_select
     
 
 # Compute gaussian kernel
