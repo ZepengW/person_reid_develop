@@ -52,11 +52,11 @@ dataset:
   type: image
   # reading method
   reading_method_train:
-    name: get_img
+    name: get_img_hm
     # define other parameter, such as image size
     image_size: [256, 128]
   reading_method_test:
-    name: get_img
+    name: get_img_hm
     # define other parameter, such as image size
     image_size: [256, 128]
 

@@ -6,13 +6,14 @@ model-manager:
   network_name: predict_jointformer # the network model
 #  network-params: # the params used to create model
 #    pretrained: True
-  network_inputs: ['img','hm', 'vis_score'] # the data dict keys which the network input
+  network_inputs: ['img','hm','vis_score'] # the data dict keys which the network input
   save_name: model  # final model save name is [save_name]_[epoch].pkl
   #load_path: ./output/test.pkl   # load from './output/test.pkl'
   #load_path: True        # auto load model with [save_name]
   #load_path: False       # Do Not Load
+  epoch: 120
   solver:
-    optimizer: SGD
+    optimizer: Adam
     base_lr: 0.0001
     weight_decay: 0.0003
     warmup_epochs: 5

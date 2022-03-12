@@ -1003,8 +1003,8 @@ class PredictJointFormer(nn.Module):
         # backbone transformer
         s,f = self.transformer(patch_feat, vis_score)
         if self.training:
-            return f
-        return s, f
+            return s, f
+        return f
 
 
 

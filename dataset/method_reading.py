@@ -151,7 +151,7 @@ class GetImgWithHm(object):
         cid = data.get('cid')
         json_name = os.path.basename(img_path).split('.jpg')[0]+'.json'
         json_dir = os.path.dirname(img_path)+'-alphapose'
-        json_path = os.path.join(json_dir, json_name)
+        json_path = os.path.join(json_dir,'sep-json', json_name)
         
         if not os.path.isfile(img_path):
             logging.error(f'Can Not Read Image {img_path}')
