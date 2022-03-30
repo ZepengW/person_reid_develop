@@ -1059,7 +1059,7 @@ class TransformerBackbone(nn.Module):
                 pretrained = '', stride_size = [11, 11], num_camera=0, num_view = 0,
                 drop_path_rate = 0.1, drop_rate = 0.0, attn_drop_rate = 0.0,
                 sie_coe = 3.0, shuffle_groups = 2, shift_num = 5, 
-                divide_length = 4,
+                divide_length = 4, neck_feat = 'before',
                 **kwargs):
         super(TransformerBackbone, self).__init__()
         # vit backbone network
@@ -1119,6 +1119,7 @@ class TransformerBackbone(nn.Module):
         self.divide_length = divide_length
         print('using divide_length size:{}'.format(self.divide_length))
         self.rearrange = True
+        self.neck_feat = neck_feat
 
     def forward(self, img, camera_id = None):
         features = self.base(img, cam_label=camera_id)
