@@ -1,10 +1,11 @@
 from turtle import forward
 import torch.nn as nn
 import torch.nn.functional as F
-from model.net.backbones.vit_pytorch import vit_base_patch16_224_TransReID
+import model.net.backbones.vit_pytorch_transreid as transreid_backbone
 from model.net.backbones.resnet import ResNet, Bottleneck
 from model.net.backbones.pcb import OSBlock, Pose_Subnet, PCB_Feature
 from model.net.backbones.vit_pytorch import TransReID
+from model.net.backbones.vit_pytorch_transreid import TransReID as TransReIDBackbone
 from model.net.backbones.vision_transformer import VisionTransformerForJoint
 import copy
 import torch
@@ -12,6 +13,7 @@ import logging
 import random
 from functools import partial
 from loss.triplet_loss import TripletLoss, CrossEntropyLabelSmooth
+import os
 
 def weights_init_kaiming(m):
     classname = m.__class__.__name__
@@ -1053,54 +1055,272 @@ class PredictJointFormer(nn.Module):
     
 class TransformerBackbone(nn.Module):
     # Jointforer, using Sim MIM to predict unseened body joint position feature
-    def __init__(self, num_classes, vit_pretrained_path=None, in_planes=768, 
-            patch_size=16, num_patches =128, **kwargs):
+    def __init__(self, num_classes, img_size, patch_size =  16,
+                pretrained = '', stride_size = [11, 11], num_camera=0, num_view = 0,
+                drop_path_rate = 0.1, drop_rate = 0.0, attn_drop_rate = 0.0,
+                sie_coe = 3.0, shuffle_groups = 2, shift_num = 5, 
+                divide_length = 4,
+                **kwargs):
         super(TransformerBackbone, self).__init__()
-        self.num_classes = num_classes
-        self.in_planes = in_planes
-        # heatmap patch 
-        self.pooling = nn.AvgPool2d(patch_size, stride=patch_size)
-        self.embeding = nn.Conv2d(3, in_planes, patch_size, stride=patch_size)
-        self.embeding = nn.Sequential(
-
-        )
         # vit backbone network
-        self.encoder_t = VisionTransformerForJoint(
-            num_classes=num_classes,
-            embed_dim=self.in_planes,
-            depth=kwargs.get('depth', 12),
-            num_heads=kwargs.get('num_heads', 12),
-            mlp_ratio=kwargs.get('mul_ratio', 4),
-            qkv_bias=kwargs.get('qkv_bias', True),
-            drop_rate=kwargs.get('drop_rate', 0.0),
-            drop_path_rate=kwargs.get('drop_path_rate', 0.1),
-            norm_layer=partial(nn.LayerNorm, eps=1e-6),
-            init_values=kwargs.get('init_values', 0.1),
-            use_abs_pos_emb=kwargs.get('use_ape', False),
-            use_rel_pos_bias=kwargs.get('use_rpb', True),
-            use_mean_pooling=kwargs.get('use_mean_pooling', True),
-            num_patches= num_patches
+        self.base = TransReIDBackbone(img_size=img_size, patch_size=patch_size, 
+            stride_size=stride_size, embed_dim=768, depth=12, 
+            num_heads=12, mlp_ratio=4, qkv_bias=True,
+            camera=num_camera, view=num_view, drop_path_rate=drop_path_rate, 
+            drop_rate=drop_rate, attn_drop_rate=attn_drop_rate,
+            norm_layer=partial(nn.LayerNorm, eps=1e-6),  
+            sie_xishu=sie_coe, local_feature=True)
+        if os.path.isfile(pretrained):
+            self.base.load_param(pretrained)
+            logging.info(f'Loading pretrained model......from {pretrained}')
+        block = self.base.blocks[-1]
+        layer_norm = self.base.norm
+        self.b1 = nn.Sequential(
+            copy.deepcopy(block),
+            copy.deepcopy(layer_norm)
         )
-        self.num_patches = num_patches
-        self.classify = nn.Linear(self.in_planes, self.num_classes)
+        self.b2 = nn.Sequential(
+            copy.deepcopy(block),
+            copy.deepcopy(layer_norm)
+        )
+        self.num_classes = num_classes
+        self.in_planes = 768
+        # classifier
+        self.classifier = nn.Linear(self.in_planes, self.num_classes, bias=False)
+        self.classifier.apply(weights_init_classifier)
+        self.classifier_1 = nn.Linear(self.in_planes, self.num_classes, bias=False)
+        self.classifier_1.apply(weights_init_classifier)
+        self.classifier_2 = nn.Linear(self.in_planes, self.num_classes, bias=False)
+        self.classifier_2.apply(weights_init_classifier)
+        self.classifier_3 = nn.Linear(self.in_planes, self.num_classes, bias=False)
+        self.classifier_3.apply(weights_init_classifier)
+        self.classifier_4 = nn.Linear(self.in_planes, self.num_classes, bias=False)
+        self.classifier_4.apply(weights_init_classifier)
+        self.bottleneck = nn.BatchNorm1d(self.in_planes)
+        self.bottleneck.bias.requires_grad_(False)
+        self.bottleneck.apply(weights_init_kaiming)
+        self.bottleneck_1 = nn.BatchNorm1d(self.in_planes)
+        self.bottleneck_1.bias.requires_grad_(False)
+        self.bottleneck_1.apply(weights_init_kaiming)
+        self.bottleneck_2 = nn.BatchNorm1d(self.in_planes)
+        self.bottleneck_2.bias.requires_grad_(False)
+        self.bottleneck_2.apply(weights_init_kaiming)
+        self.bottleneck_3 = nn.BatchNorm1d(self.in_planes)
+        self.bottleneck_3.bias.requires_grad_(False)
+        self.bottleneck_3.apply(weights_init_kaiming)
+        self.bottleneck_4 = nn.BatchNorm1d(self.in_planes)
+        self.bottleneck_4.bias.requires_grad_(False)
+        self.bottleneck_4.apply(weights_init_kaiming)
 
-    def forward(self, img):
-        # img shape: B, 3, H, W
-        B,C,H,W = img.shape
+        self.shuffle_groups = shuffle_groups
+        print('using shuffle_groups size:{}'.format(self.shuffle_groups))
+        self.shift_num = shift_num
+        print('using shift_num size:{}'.format(self.shift_num))
+        self.divide_length = divide_length
+        print('using divide_length size:{}'.format(self.divide_length))
+        self.rearrange = True
 
-        # patch embeding
-        img = self.embeding(img)
-        # patch selector
-        img = img.reshape([B, self.in_planes, -1])
-        img = img.permute([0,2,1])  # B, N, Dim
-        vis_score = torch.ones([B, self.num_patches]).to(img.device)
-        f = self.encoder_t(img, vis_score)
-        
+    def forward(self, img, camera_id = None):
+        features = self.base(img, cam_label=camera_id)
+
+        # global branch
+        b1_feat = self.b1(features) # [64, 129, 768]
+        global_feat = b1_feat[:, 0]
+
+        # JPM branch
+        feature_length = features.size(1) - 1
+        patch_length = feature_length // self.divide_length
+        token = features[:, 0:1]
+
+        if self.rearrange:
+            x = shuffle_unit(features, self.shift_num, self.shuffle_groups)
+        else:
+            x = features[:, 1:]
+        # lf_1
+        b1_local_feat = x[:, :patch_length]
+        b1_local_feat = self.b2(torch.cat((token, b1_local_feat), dim=1))
+        local_feat_1 = b1_local_feat[:, 0]
+
+        # lf_2
+        b2_local_feat = x[:, patch_length:patch_length*2]
+        b2_local_feat = self.b2(torch.cat((token, b2_local_feat), dim=1))
+        local_feat_2 = b2_local_feat[:, 0]
+
+        # lf_3
+        b3_local_feat = x[:, patch_length*2:patch_length*3]
+        b3_local_feat = self.b2(torch.cat((token, b3_local_feat), dim=1))
+        local_feat_3 = b3_local_feat[:, 0]
+
+        # lf_4
+        b4_local_feat = x[:, patch_length*3:patch_length*4]
+        b4_local_feat = self.b2(torch.cat((token, b4_local_feat), dim=1))
+        local_feat_4 = b4_local_feat[:, 0]
+
+        feat = self.bottleneck(global_feat)
+
+        local_feat_1_bn = self.bottleneck_1(local_feat_1)
+        local_feat_2_bn = self.bottleneck_2(local_feat_2)
+        local_feat_3_bn = self.bottleneck_3(local_feat_3)
+        local_feat_4_bn = self.bottleneck_4(local_feat_4)
+
         if self.training:
-            s = self.classify(f[:,0])
-            return s, f[:,0]
-        return f[:, 0]
+            cls_score = self.classifier(feat)
+            cls_score_1 = self.classifier_1(local_feat_1_bn)
+            cls_score_2 = self.classifier_2(local_feat_2_bn)
+            cls_score_3 = self.classifier_3(local_feat_3_bn)
+            cls_score_4 = self.classifier_4(local_feat_4_bn)
+            return [cls_score, cls_score_1, cls_score_2, cls_score_3,
+                        cls_score_4
+                        ], [global_feat, local_feat_1, local_feat_2, local_feat_3,
+                            local_feat_4]  # global feature for triplet loss
+        else:
+            if self.neck_feat == 'after':
+                return torch.cat(
+                    [feat, local_feat_1_bn / 4, local_feat_2_bn / 4, local_feat_3_bn / 4, local_feat_4_bn / 4], dim=1)
+            else:
+                return torch.cat(
+                    [global_feat, local_feat_1 / 4, local_feat_2 / 4, local_feat_3 / 4, local_feat_4 / 4], dim=1)
 
+class TransReIDModify(nn.Module):
+    """ Modify based on Transformer-based Object Re-Identification
+    """
+    def __init__(self, img_size=224, patch_size=16, stride_size=16, in_chans=3, num_classes=1000, embed_dim=768, depth=12,
+                 num_heads=12, mlp_ratio=4., qkv_bias=False, qk_scale=None, drop_rate=0., attn_drop_rate=0., camera=0, view=0,
+                 drop_path_rate=0., hybrid_backbone=None, norm_layer=nn.LayerNorm, local_feature=False, sie_xishu =1.0):
+        super().__init__()
+        self.num_classes = num_classes
+        self.num_features = self.embed_dim = embed_dim  # num_features for consistency with other models
+        self.local_feature = local_feature
+        if hybrid_backbone is not None:
+            self.patch_embed = transreid_backbone.HybridEmbed(
+                hybrid_backbone, img_size=img_size, in_chans=in_chans, embed_dim=embed_dim)
+        else:
+            self.patch_embed = transreid_backbone.PatchEmbed_overlap(
+                img_size=img_size, patch_size=patch_size, stride_size=stride_size, in_chans=in_chans,
+                embed_dim=embed_dim)
 
-    def get_loss(self, *wargs):
-        return self.loss, self.loss_value_list, self.loss_name_list
+        num_patches = self.patch_embed.num_patches
+
+        self.cls_token = nn.Parameter(torch.zeros(1, 1, embed_dim))
+        self.pos_embed = nn.Parameter(torch.zeros(1, num_patches + 1, embed_dim))
+        self.cam_num = camera
+        self.view_num = view
+        self.sie_xishu = sie_xishu
+        # Initialize SIE Embedding
+        if camera > 1 and view > 1:
+            self.sie_embed = nn.Parameter(torch.zeros(camera * view, 1, embed_dim))
+            transreid_backbone.trunc_normal_(self.sie_embed, std=.02)
+            print('camera number is : {} and viewpoint number is : {}'.format(camera, view))
+            print('using SIE_Lambda is : {}'.format(sie_xishu))
+        elif camera > 1:
+            self.sie_embed = nn.Parameter(torch.zeros(camera, 1, embed_dim))
+            transreid_backbone.trunc_normal_(self.sie_embed, std=.02)
+            print('camera number is : {}'.format(camera))
+            print('using SIE_Lambda is : {}'.format(sie_xishu))
+        elif view > 1:
+            self.sie_embed = nn.Parameter(torch.zeros(view, 1, embed_dim))
+            transreid_backbone.trunc_normal_(self.sie_embed, std=.02)
+            print('viewpoint number is : {}'.format(view))
+            print('using SIE_Lambda is : {}'.format(sie_xishu))
+
+        print('using drop_out rate is : {}'.format(drop_rate))
+        print('using attn_drop_out rate is : {}'.format(attn_drop_rate))
+        print('using drop_path rate is : {}'.format(drop_path_rate))
+
+        self.pos_drop = nn.Dropout(p=drop_rate)
+        dpr = [x.item() for x in torch.linspace(0, drop_path_rate, depth)]  # stochastic depth decay rule
+
+        self.blocks = nn.ModuleList([
+            transreid_backbone.Block(
+                dim=embed_dim, num_heads=num_heads, mlp_ratio=mlp_ratio, qkv_bias=qkv_bias, qk_scale=qk_scale,
+                drop=drop_rate, attn_drop=attn_drop_rate, drop_path=dpr[i], norm_layer=norm_layer)
+            for i in range(depth)])
+
+        self.norm = norm_layer(embed_dim)
+
+        # Classifier head
+        self.fc = nn.Linear(embed_dim, num_classes) if num_classes > 0 else nn.Identity()
+        transreid_backbone.trunc_normal_(self.cls_token, std=.02)
+        transreid_backbone.trunc_normal_(self.pos_embed, std=.02)
+
+        self.apply(self._init_weights)
+
+    def _init_weights(self, m):
+        if isinstance(m, nn.Linear):
+            transreid_backbone.trunc_normal_(m.weight, std=.02)
+            if isinstance(m, nn.Linear) and m.bias is not None:
+                nn.init.constant_(m.bias, 0)
+        elif isinstance(m, nn.LayerNorm):
+            nn.init.constant_(m.bias, 0)
+            nn.init.constant_(m.weight, 1.0)
+
+    @torch.jit.ignore
+    def no_weight_decay(self):
+        return {'pos_embed', 'cls_token'}
+
+    def get_classifier(self):
+        return self.head
+
+    def reset_classifier(self, num_classes, global_pool=''):
+        self.num_classes = num_classes
+        self.fc = nn.Linear(self.embed_dim, num_classes) if num_classes > 0 else nn.Identity()
+
+    def forward_features(self, x, camera_id, view_id):
+        B = x.shape[0]
+        x = self.patch_embed(x)
+
+        cls_tokens = self.cls_token.expand(B, -1, -1)  # stole cls_tokens impl from Phil Wang, thanks
+        x = torch.cat((cls_tokens, x), dim=1)
+
+        if self.cam_num > 0 and self.view_num > 0:
+            x = x + self.pos_embed + self.sie_xishu * self.sie_embed[camera_id * self.view_num + view_id]
+        elif self.cam_num > 0:
+            x = x + self.pos_embed + self.sie_xishu * self.sie_embed[camera_id]
+        elif self.view_num > 0:
+            x = x + self.pos_embed + self.sie_xishu * self.sie_embed[view_id]
+        else:
+            x = x + self.pos_embed
+
+        x = self.pos_drop(x)
+
+        if self.local_feature:
+            for blk in self.blocks[:-1]:
+                x = blk(x)
+            return x
+
+        else:
+            for blk in self.blocks:
+                x = blk(x)
+
+            x = self.norm(x)
+
+            return x[:, 0]
+
+    def forward(self, x, cam_label=None, view_label=None):
+        x = self.forward_features(x, cam_label, view_label)
+        return x
+
+    def load_param(self, model_path):
+        param_dict = torch.load(model_path, map_location='cpu')
+        if 'model' in param_dict:
+            param_dict = param_dict['model']
+        if 'state_dict' in param_dict:
+            param_dict = param_dict['state_dict']
+        for k, v in param_dict.items():
+            if 'head' in k or 'dist' in k:
+                continue
+            if 'patch_embed.proj.weight' in k and len(v.shape) < 4:
+                # For old models that I trained prior to conv based patchification
+                O, I, H, W = self.patch_embed.proj.weight.shape
+                v = v.reshape(O, -1, H, W)
+            elif k == 'pos_embed' and v.shape != self.pos_embed.shape:
+                # To resize pos embedding when using model at different size from pretrained weights
+                if 'distilled' in model_path:
+                    print('distill need to choose right cls token in the pth')
+                    v = torch.cat([v[:, 0:1], v[:, 2:]], dim=1)
+                v = transreid_backbone.resize_pos_embed(v, self.pos_embed, self.patch_embed.num_y, self.patch_embed.num_x)
+            try:
+                self.state_dict()[k].copy_(v)
+            except:
+                print('===========================ERROR=========================')
+                print('shape do not match in k :{}: param_dict{} vs self.state_dict(){}'.format(k, v.shape, self.state_dict()[k].shape))

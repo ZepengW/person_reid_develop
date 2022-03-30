@@ -8,16 +8,24 @@ import torch
 from timm.data.random_erasing import RandomErasing
 import timm.data.random_erasing as r_e
 
-def build_transforms(size):
-    normalize_transform = T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
-    transforms = T.Compose([
-        T.Resize(size),
-        #T.Pad(10),
-        #T.RandomCrop([256, 128]),
-        T.ToTensor(),
-        normalize_transform,
-        #RandomErasing(probability=0.5, mean=[0.485, 0.456, 0.406])
-    ])
+def build_transforms(size, type = 'train', flip_prob = 0.5, padding = 10, re_prob=0.5,
+                mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]):
+    if type == 'train':
+        transforms = T.Compose([
+            T.Resize(size, interpolation=3),
+            T.RandomHorizontalFlip(p=flip_prob),
+            T.Pad(padding),
+            T.RandomCrop(size),
+            T.ToTensor(),
+            T.Normalize(mean=mean, std=std),
+            RandomErasing(probability=re_prob, mode='pixel', max_count=1, device='cpu'),
+        ])
+    else:
+        transforms = T.Compose([
+            T.Resize(size, interpolation=3),
+            T.ToTensor(),
+            T.Normalize(mean=mean, std=std)
+        ])
     return transforms
 
 def build_transorms_shape(size, mode = 'train', padding = 10, flip_prob = 0.5):

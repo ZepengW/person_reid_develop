@@ -20,14 +20,14 @@ class GetImg(object):
     :return:
     """
 
-    def __init__(self, **kwargs):
+    def __init__(self, type, **kwargs):
         self.img_size = kwargs.get('image_size')
-        self.tf = build_transforms(self.img_size)
+        self.tf = build_transforms(self.img_size, type = type)
 
     def __call__(self, data: dict):
         img_path = data.get('img_path')
         pid = data.get('pid')
-        cid = data.get('cid')
+        cid = data.get('cid') - 1
         if not os.path.isfile(img_path):
             logging.error(f'Can Not Read Image {img_path}')
             img = None
