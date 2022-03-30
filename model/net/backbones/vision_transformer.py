@@ -414,18 +414,10 @@ class VisionTransformerForJoint(nn.Module):
         for blk in self.blocks:
             x = blk(x, rel_pos_bias=rel_pos_bias)
         x = self.norm(x)
-
-        x = x[:, 1:]
-        if self.fc_norm is not None:
-            t = x[:, 1:, :]
-            return self.fc_norm(t.mean(1))
-        else:
-            return x[:, 0]
+        return x
 
     def forward(self, x, vis_score):
-        f = self.forward_features(x, vis_score)
-        x = self.head(f)
-        return x, f
+        return self.forward_features(x, vis_score)
 
 def build_vit(config):
     model = VisionTransformer(

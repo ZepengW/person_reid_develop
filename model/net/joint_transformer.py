@@ -1,5 +1,6 @@
 from turtle import forward
 import torch.nn as nn
+import torch.nn.functional as F
 from model.net.backbones.vit_pytorch import vit_base_patch16_224_TransReID
 from model.net.backbones.resnet import ResNet, Bottleneck
 from model.net.backbones.pcb import OSBlock, Pose_Subnet, PCB_Feature
@@ -10,6 +11,7 @@ import torch
 import logging
 import random
 from functools import partial
+from loss.triplet_loss import TripletLoss, CrossEntropyLabelSmooth
 
 def weights_init_kaiming(m):
     classname = m.__class__.__name__
@@ -961,15 +963,19 @@ class JointFromerPCBv4(nn.Module):
 
 class PredictJointFormer(nn.Module):
     # Jointforer, using Sim MIM to predict unseened body joint position feature
-    def __init__(self, num_classes, vit_pretrained_path=None, in_planes=768, pretrained=True, patch_size=[30,30], **kwargs):
+    def __init__(self, num_classes, vit_pretrained_path=None, in_planes=768, 
+            patch_size=16, enable_mask = True, mask_ratio=0.3, **kwargs):
         super(PredictJointFormer, self).__init__()
         self.num_classes = num_classes
         self.in_planes = in_planes
         # heatmap patch 
         self.pooling = nn.AvgPool2d(patch_size, stride=patch_size)
         self.embeding = nn.Conv2d(3, in_planes, patch_size, stride=patch_size)
+        self.embeding = nn.Sequential(
+
+        )
         # vit backbone network
-        self.transformer = VisionTransformerForJoint(
+        self.encoder_t = VisionTransformerForJoint(
             num_classes=num_classes,
             embed_dim=self.in_planes,
             depth=kwargs.get('depth', 12),
@@ -985,8 +991,19 @@ class PredictJointFormer(nn.Module):
             use_mean_pooling=kwargs.get('use_mean_pooling', True)
         )
 
+        self.decoder = nn.Conv1d(in_channels=self.in_planes,
+                out_channels=self.in_planes, kernel_size=1)
+        
+        self.classify = nn.Linear(self.in_planes, self.num_classes)
+        self.patch_size = patch_size
+        self.mask_ratio = mask_ratio
+        self.loss_name_list = ['xent','triplet','recon']
+        self.triplet_f = TripletLoss()
+        #self.xent_f = nn.CrossEntropyLoss()
+        self.xent_f = CrossEntropyLabelSmooth(num_classes)
+        self.enable_mask = enable_mask
 
-    def forward(self, img, hm, vis_score):
+    def forward(self, img, hm, vis_score, pid):
         # img shape: B, 3, H, W
         # hm shape: B, 18, H, W
         B, V, H, W = hm.shape
@@ -999,14 +1016,91 @@ class PredictJointFormer(nn.Module):
         img = img.permute([0,2,1])  # B, N, Dim
         body_feat_idx = torch.argmax(hm, dim =2) # B, V
         patch_feat = torch.einsum('bnd,bv->bvd', img, body_feat_idx)
-
+        # select pose id randomly to mask
+        mask_id = random.randrange(0, V, int(V*self.mask_ratio))
+        un_vis_id = vis_score
+        vis_score[:, mask_id] = 0
         # backbone transformer
-        s,f = self.transformer(patch_feat, vis_score)
+        f = self.encoder_t(img, vis_score)
+        
         if self.training:
-            return s, f
-        return f
+            self.loss = 0
+            if self.enable_mask:
+                f_p = f[:,1:]   # B V C
+                f_p = f_p.permute(0,2,1)    # B, C, V
+                # reverse the masked pose parts and calculate the loss
+                patch_rec = self.decoder(f_p)  # B, C, V
+                patch_rec = patch_rec.permute(0,2,1)    # B, V, C
+                loss_recon = F.l1_loss(patch_rec[:,mask_id,:], patch_feat[:,mask_id,:])
+                self.loss += 0.001 * loss_recon
+            else:
+                loss_recon = torch.tensor(0.0).to(img.device)
 
+            s = self.classify(f[:,0])
+            loss_xent = self.xent_f(s, pid)
+            loss_trip = self.triplet_f(s, pid)
+            self.loss_value_list = [loss_xent.item(), loss_trip.item(), loss_recon.item()]
+            self.loss += loss_xent + loss_trip
+            return s, f[:,0]
+        return f[:, 0]
+
+
+    def get_loss(self, *wargs):
+        return self.loss, self.loss_value_list, self.loss_name_list
 
 
 
     
+class TransformerBackbone(nn.Module):
+    # Jointforer, using Sim MIM to predict unseened body joint position feature
+    def __init__(self, num_classes, vit_pretrained_path=None, in_planes=768, 
+            patch_size=16, num_patches =128, **kwargs):
+        super(TransformerBackbone, self).__init__()
+        self.num_classes = num_classes
+        self.in_planes = in_planes
+        # heatmap patch 
+        self.pooling = nn.AvgPool2d(patch_size, stride=patch_size)
+        self.embeding = nn.Conv2d(3, in_planes, patch_size, stride=patch_size)
+        self.embeding = nn.Sequential(
+
+        )
+        # vit backbone network
+        self.encoder_t = VisionTransformerForJoint(
+            num_classes=num_classes,
+            embed_dim=self.in_planes,
+            depth=kwargs.get('depth', 12),
+            num_heads=kwargs.get('num_heads', 12),
+            mlp_ratio=kwargs.get('mul_ratio', 4),
+            qkv_bias=kwargs.get('qkv_bias', True),
+            drop_rate=kwargs.get('drop_rate', 0.0),
+            drop_path_rate=kwargs.get('drop_path_rate', 0.1),
+            norm_layer=partial(nn.LayerNorm, eps=1e-6),
+            init_values=kwargs.get('init_values', 0.1),
+            use_abs_pos_emb=kwargs.get('use_ape', False),
+            use_rel_pos_bias=kwargs.get('use_rpb', True),
+            use_mean_pooling=kwargs.get('use_mean_pooling', True),
+            num_patches= num_patches
+        )
+        self.num_patches = num_patches
+        self.classify = nn.Linear(self.in_planes, self.num_classes)
+
+    def forward(self, img):
+        # img shape: B, 3, H, W
+        B,C,H,W = img.shape
+
+        # patch embeding
+        img = self.embeding(img)
+        # patch selector
+        img = img.reshape([B, self.in_planes, -1])
+        img = img.permute([0,2,1])  # B, N, Dim
+        vis_score = torch.ones([B, self.num_patches]).to(img.device)
+        f = self.encoder_t(img, vis_score)
+        
+        if self.training:
+            s = self.classify(f[:,0])
+            return s, f[:,0]
+        return f[:, 0]
+
+
+    def get_loss(self, *wargs):
+        return self.loss, self.loss_value_list, self.loss_name_list
