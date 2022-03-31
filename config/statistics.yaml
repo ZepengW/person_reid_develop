@@ -1,0 +1,17 @@
+gpu: [-1]
+eval_interval: 10 # eval each [eval_interval]
+mode: statistics    # statis the network params and Flops
+
+model-manager:
+  network_name: coatten_r_mv # the network model
+  network-params: # the params used to create model
+    num_class: 101
+    num_segments: 3
+    representation: iframe
+    embed_size: 512
+    sequence_size: 16
+  inputs_shape:
+    - [1,16,3,256,256]
+    - [1,16,2,256,256]
+
+

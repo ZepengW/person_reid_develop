@@ -47,6 +47,19 @@ def set_gpus_env(gpu_ids):
 def main(config, writer_tensorboardX):
     set_seed(config.get('seed', 1234))
     device = set_gpus_env(config.get('gpu', [0]))
+    mode = config.get('mode', 'train')
+    model_config = config.get('model-manager', dict())
+
+    # Statistical parameters and Flops
+    if mode == 'statistics':
+        model = ModelManager(model_config, device)
+        if not 'inputs_shape' in model_config.keys():
+            logging.error('Input the inputs shape')
+            return
+        input_shape_l = model_config.get('inputs_shape')
+        model.check_model_params(input_shape_l)
+        return
+
     # vis config
     cfg_vis = config.get('vis_params', dict())
     vis_bool = cfg_vis.get('vis', False)  # draw feature distribution
@@ -57,11 +70,8 @@ def main(config, writer_tensorboardX):
     log_dataset_config(dataset_config)
     dataset_manager = DatasetManager(dataset_config.get('dataset_name', ''), dataset_config.get('dataset_path', ''))
 
-    model_config = config.get('model-manager', dict())
     model = ModelManager(model_config, device, class_num=dataset_manager.get_train_pid_num(),
                          writer=writer_tensorboardX)
-
-    mode = config.get('mode', 'train')
     dataset_type = dataset_config.get('type', 'image')
     get_dataset = dataset_manager.get_dataset_image  # support image reading for now
     # get reading method

@@ -1,5 +1,6 @@
 import torch
 import logging
+import re
 
 def make_optimizer(cfg_solver:dict, model, center_criterion= None):
     """
@@ -13,36 +14,37 @@ def make_optimizer(cfg_solver:dict, model, center_criterion= None):
     lr_base = cfg_solver.get('base_lr', 0.0003)
     weight_decay_base = cfg_solver.get('weight_decay', 0.0005)
     logging.info(f'=> Initial Optimizer:{optimizer}')
-    logging.info(f'----base_lr:{lr_base}')
-    logging.info(f'----weight_decay:{weight_decay_base}')
-    logging.info(f'----bias_lr_factor:{cfg_solver.get("bias_lr_factor", 1)}')
-    logging.info(f'----weight_decay_bias:{cfg_solver.get("weight_decay_bias", 0.0005)}')
-    logging.info(f'----large_fc_lr:{cfg_solver.get("large_fc_lr", False)}')
+    logging.info(f'----base base_lr:{lr_base}')
+    logging.info(f'----base weight_decay:{weight_decay_base}')
+    spec_layer = cfg_solver.get('spec_layer', [])
+    #format [{'re':'layer_name regex', 'lr':'lr', 'weight_decay':'weight_decay'}]
+    # if lr is 0, demonstrate the layers matched is frozen
     params = []
     for key, value in model.named_parameters():
         if not value.requires_grad:
             continue
-        lr = lr_base
-        weight_decay = weight_decay_base
-        if "bias" in key:
-            lr = lr * cfg_solver.get('bias_lr_factor', 1)
-            weight_decay = cfg_solver.get('weight_decay_bias', 0.0005)
-        if cfg_solver.get('large_fc_lr', False):
-            # Whether using larger learning rate for fc layer
-            if "classifier" in key or "arcface" in key:
-                lr = lr * 2
-                print('Using two times learning rate for fc ')
-
-        params += [{"params": [value], "lr": lr, "weight_decay": weight_decay}]
-
-
+        flag_finish = False
+        for spec in spec_layer:
+            if re.search(spec['re'],key):
+                lr = spec.get('lr', 0)
+                weight_decay = spec.get('weight_decay', weight_decay_base)
+                if not lr == 0:
+                    params += [{"params": [value], "lr": lr, "weight_decay": weight_decay}]
+                else:
+                    value.requires_grad = True
+                flag_finish = True
+                break
+        # default value
+        if not flag_finish:
+            params += [{"params": [value], "lr": lr_base, "weight_decay": weight_decay_base}]
+        logging.debug(f"tra")
     if optimizer == 'SGD':
         optimizer = getattr(torch.optim, optimizer)(params, momentum=cfg_solver.get('momentum', 0.9))
     elif optimizer == 'AdamW':
-        optimizer = torch.optim.AdamW(params, lr=cfg_solver.get('base_lr', 0.0003),
-                                      weight_decay=cfg_solver.get('weight_decay', 0.0005))
+        optimizer = torch.optim.AdamW(params, lr=lr_base,
+                                      weight_decay=weight_decay_base)
     else:
-        optimizer = getattr(torch.optim, optimizer)(params)
+        optimizer = getattr(torch.optim, optimizer)(params, lr = lr_base, weight_decay = weight_decay_base)
 
     if not center_criterion is None:
         optimizer_center = torch.optim.SGD(center_criterion.parameters(), lr= cfg_solver.get('center_lr', 0.5))
