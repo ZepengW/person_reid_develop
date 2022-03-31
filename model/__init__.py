@@ -12,6 +12,7 @@ from tensorboardX import SummaryWriter
 import solver
 from loss import make_loss
 import random
+from fvcore.nn import FlopCountAnalysis, parameter_count_table, flop_count_table
 
 
 
@@ -284,6 +285,21 @@ class ModelManager:
         features_vis = features[index]
         pids_arr = pids_arr[index]
         return features_vis, pids_arr
+
+    def check_model_params(self, input_shape_l: list):
+        # create input tensor
+        tensor_input = []
+        for input_shape in input_shape_l:
+            t = torch.rand(input_shape).to(self.device)
+            tensor_input.append(t)
+        #tensor_input = set(tensor_input)
+        self.net.eval()
+        flops = FlopCountAnalysis(self.net, tuple(tensor_input))
+        #flops = FlopCountAnalysis(self.net, (torch.rand([1,16,3,256,256]).to(self.device),torch.rand([1,16,2,256,256]).to(self.device)))
+        #logging.info(f"FLOPs:{flops.total()}")
+        logging.info('\n'+flop_count_table(flops))
+
+
 
 def PCA_svd(X, k, center=True):
     n = X.size()[0]
