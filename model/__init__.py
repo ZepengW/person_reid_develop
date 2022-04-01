@@ -30,12 +30,6 @@ class ModelManager:
         # data keys which the network input
         self.input_keys = cfg.get('network_inputs', ['img','pid'])
 
-        # Multi-GPU Set
-        if torch.cuda.device_count() > 1:
-            self.net = nn.DataParallel(self.net)
-        self.net.to(self.device)
-
-        self.trained_epoches = 0
         # load model trained before
         load_path = cfg.get('load_path', False)
         if type(load_path) is str:
@@ -46,6 +40,15 @@ class ModelManager:
             if load_path:
                 self.trained_epoches = self.load_model(self.net, cfg.get('save_name','model-no-name'))
 
+
+        # Multi-GPU Set
+        if torch.cuda.device_count() > 1:
+            self.net = nn.DataParallel(self.net)
+        self.net.to(self.device)
+
+        self.trained_epoches = 0
+        
+        
         # loss function
         if(cfg.get('use_model_loss', False)):
             self.lossesFunction = self.net.get_loss
