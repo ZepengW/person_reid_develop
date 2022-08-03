@@ -9,13 +9,10 @@ class MSMT17(object):
         train_dir = os.path.join(self.dataset_dir,'bounding_box_train')
         test_dir = os.path.join(self.dataset_dir,'bounding_box_test')
         query_dir = os.path.join(self.dataset_dir,'query')
-        train_heatmap_dir = os.path.join(self.dataset_dir,'train-alphapose-result/heatmap')
-        test_heatmap_dir = os.path.join(self.dataset_dir,'test-alphapose-result/heatmap')
-        query_heatmap_dir = os.path.join(self.dataset_dir,'query-alphapose-result/heatmap')
 
-        train_list, num_train_pids, num_train_imgs = self._process_data(train_dir,relabel=True,hm_dir=train_heatmap_dir)
-        test_list, num_test_pids, num_test_imgs = self._process_data(test_dir,hm_dir=test_heatmap_dir)
-        query_list, num_query_pids, num_query_imgs = self._process_data(query_dir,hm_dir=query_heatmap_dir)
+        train_list, num_train_pids, num_train_imgs = self._process_data(train_dir,relabel=True)
+        test_list, num_test_pids, num_test_imgs = self._process_data(test_dir)
+        query_list, num_query_pids, num_query_imgs = self._process_data(query_dir)
 
         logging.info("=> MSMT-17 loaded")
         logging.info("Dataset statistics:")
@@ -34,7 +31,7 @@ class MSMT17(object):
 
 
     #img_paths, pid, cid, mask_paths
-    def _process_data(self,dir,hm_dir,relabel=False):
+    def _process_data(self,dir,relabel=False):
         train_list = []
         id_set = set()
         files = os.listdir(dir)
@@ -44,9 +41,7 @@ class MSMT17(object):
             img_path = os.path.join(dir,file)
             pid = int(file.split('_')[0])
             cid = int((file.split('c')[1]).split('_')[0]) - 1
-            clothes_id = -1
-            hm_path = os.path.join(hm_dir,os.path.splitext(file)[0]+'.npy')
-            train_list.append((img_path,pid,cid,clothes_id,hm_path))
+            train_list.append((img_path,pid,cid))
             id_set.add(pid)
         # relabel id to continues
         if relabel:
@@ -54,6 +49,19 @@ class MSMT17(object):
             id_list.sort()
             train_list_relabel = []
             for i in train_list:
-                train_list_relabel.append((i[0],id_list.index(i[1]),i[2],i[3],i[4]))
+                train_list_relabel.append((i[0],id_list.index(i[1]),i[2]))
             train_list = train_list_relabel
-        return train_list, len(id_set), len(train_list)
+        
+        data_list = []
+        for data in train_list:
+            data_list.append(
+                {
+                    'img_path': data[0],
+                    'pid': data[1],
+                    'cid': data[2],
+                    'mask_path': data[0].replace('.jpg','.png').replace('train','train-mask')\
+                        .replace('test','test-mask').replace('query','query-mask')
+                }
+            )
+
+        return data_list, len(id_set), len(data_list)

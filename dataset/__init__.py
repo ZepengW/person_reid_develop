@@ -8,8 +8,6 @@ from dataset.dataset_duke import Duke
 from dataset.dataset_market import Market
 from dataset.dataset_msmt import MSMT17
 from dataset.dataset_mars import Mars
-from dataset.dataset_ltcc import LTCC
-from dataset.dataset_occ_reid import OccludedReID
 import numpy as np
 import dataset.method_reading as m
 import logging
@@ -18,16 +16,10 @@ DATASET_MAP = {
     'market': Market,
     'duke': Duke,
     'msmt17': MSMT17,
-    'mars': Mars,
-    'ltcc': LTCC,
-    'occreid': OccludedReID
+    'mars': Mars
 }
 __factory_reading_m = {
-    'get_img': m.GetImg,
-    'get_img_heatmap': m.GetImgHeatmap,
-    'get_img_ss': m.GetImgWithSem,
-    'get_img_mask': m.GetImgWithRandomMask,
-    'get_img_hm': m.GetImgWithHm
+    'get_img': m.GetImg
 }
 
 def initial_m_reading(method_name, **kwargs):

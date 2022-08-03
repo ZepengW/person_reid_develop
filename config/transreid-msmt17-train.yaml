@@ -1,11 +1,11 @@
 mode: train
-task-name: TransReID-Duke
+task-name: TransReID-MSMT17-revise
 gpu: [0]
 
 
 model-manager:
   network_name: transreid # the network model
-  save_name: TransReID-Duke
+  save_name: TransReID-MSMT17-revise
   network-params: # the params used to create model
     PRETRAIN_CHOICE: 'imagenet'
     PRETRAIN_PATH: './pretrained/jx_vit_base_p16_224-80ecf9dd.pth'
@@ -20,7 +20,7 @@ model-manager:
     SIE_COE: 3.0
     JPM: True
     RE_ARRANGE: True
-    CAMERA_NUM: 12
+    CAMERA_NUM: 15
     SIZE_INPUT: [256, 128]
   network_inputs: ['img','camera_id'] # the data dict keys which the network input
   epoch: 120
@@ -46,14 +46,25 @@ model-manager:
 
 
 dataset:
-  dataset_name: duke
-  dataset_path: ../dataset/DukeMTMC-reID
-  image_size:
-    - 256
-    - 128
+  dataset_name: msmt17
+  dataset_path: ../dataset/MSMT17
   num_workers: 8
   batch_size_train: 64
-  batch_size_test: 256
+  reading_method_train:
+    name: get_img
+    # define other parameter, such as image size
+    image_size: [ 256, 128 ]
+    mean: [0.5, 0.5, 0.5]
+    std: [0.5, 0.5, 0.5]
+    type: train
+  batch_size_test: 128
+  reading_method_test:
+    name: get_img
+    # define other parameter, such as image size
+    image_size: [ 256, 128 ]
+    mean: [ 0.5, 0.5, 0.5 ]
+    std: [ 0.5, 0.5, 0.5 ]
+    type: test
   type: image
 
 
