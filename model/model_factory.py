@@ -1,27 +1,10 @@
 import logging
 from .net.resnet import resnet50
-from .net.joint_transformer import JointFromer,JointFromerPCB,OnlyPCB,JointFromerV0_6,JointFromerPCBv2,JointFromerPCBv3
-from .net.joint_transformer import JointFromerPCBv4, PredictJointFormer, TransformerBackbone
 from .net.transreid import TransReID
-from .net.maskformer import MaskFormer, MaskFormer2
-from .net.simmim import SimMIM, SimMIMFinetune
 
 __factory_model = {
     'resnet50': resnet50,
-    'jointformer': JointFromer,
     'transreid': TransReID,
-    'jointformer_pcb': JointFromerPCB,
-    'jointformer_pcb_v2': JointFromerPCBv2,
-    'jointformer_pcb_v3': JointFromerPCBv3,
-    'jointformer_pcb_v4': JointFromerPCBv4,
-    'only_pcb': OnlyPCB,
-    'jointformerv0.6': JointFromerV0_6,
-    'maskformer': MaskFormer,
-    'maskformer2': MaskFormer2,
-    'simmim': SimMIM,
-    'simmim_finetune': SimMIMFinetune,
-    'predict_jointformer': PredictJointFormer,
-    'transformer': TransformerBackbone
 }
 
 
