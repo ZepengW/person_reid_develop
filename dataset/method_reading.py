@@ -27,7 +27,7 @@ class GetImg(object):
     def __call__(self, data: dict):
         img_path = data.get('img_path')
         pid = data.get('pid')
-        cid = data.get('cid') - 1
+        cid = data.get('cid')
         if not os.path.isfile(img_path):
             logging.error(f'Can Not Read Image {img_path}')
             img = None

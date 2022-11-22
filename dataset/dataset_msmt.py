@@ -40,6 +40,7 @@ class MSMT17(object):
                 continue
             img_path = os.path.join(dir,file)
             pid = int(file.split('_')[0])
+            # begin from camera id = 0
             cid = int((file.split('c')[1]).split('_')[0]) - 1
             train_list.append((img_path,pid,cid))
             id_set.add(pid)
@@ -58,9 +59,7 @@ class MSMT17(object):
                 {
                     'img_path': data[0],
                     'pid': data[1],
-                    'cid': data[2],
-                    'mask_path': data[0].replace('.jpg','.png').replace('train','train-mask')\
-                        .replace('test','test-mask').replace('query','query-mask')
+                    'cid': data[2]
                 }
             )
 
