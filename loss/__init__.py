@@ -1,12 +1,20 @@
 import logging
-from .triplet_loss import TripletLoss, WeightedRegularizedTriplet, CrossEntropyLabelSmooth
+from .triplet_loss import TripletLoss, WeightedRegularizedTriplet, CrossEntropyLabelSmooth, SoftTriple
+from .loss_multilabel import XentMultiLabel, XentMultiInput, TripletMultiInput, TripletMultiLabel, SoftlabelTripletMultiInput, XentMultiInputSoftLabel
 import torch
 import torch.nn as nn
-__factory_loss = {
-    'cross_entropy': nn.CrossEntropyLoss,
+LossFactory = {
+    'cross_entropy': XentMultiInput,
+    'xent': XentMultiInput,
+    'softlabel_xent': XentMultiInputSoftLabel,
+    'xent_multi_input': XentMultiInput,
+    'xent_multi_label': XentMultiLabel,
     'xent_label_smooth': CrossEntropyLabelSmooth,
-    'triplet': TripletLoss,
-    'wrt': WeightedRegularizedTriplet
+    'triplet': TripletMultiInput,
+    'triplet_multi_label': TripletMultiLabel,
+    'softlabel_triplet':SoftlabelTripletMultiInput,
+    'wrt': WeightedRegularizedTriplet,
+    'soft_triplet': SoftTriple,
 }
 
 
@@ -19,7 +27,7 @@ def make_loss(loss_cfg: dict, **params):
     use_loss = loss_cfg.get('use_loss',['cross_entropy'])
     logging.info(f'=> Initialing Loss Function: {use_loss}')
     for key in use_loss:
-        if not key in __factory_loss.keys():
+        if not key in LossFactory.keys():
             logging.warning(f'Can Not Find Loss Function : {key}')
             continue
         loss_params = loss_cfg[key]
@@ -29,7 +37,7 @@ def make_loss(loss_cfg: dict, **params):
         for param_name in params_initial:
             if param_name in params.keys():
                 params_input[param_name] = params[param_name]
-        loss_func_l.append(__factory_loss[key](**params_input))
+        loss_func_l.append(LossFactory[key](**params_input, **loss_cfg[key].get('params', dict())))
         loss_weight = loss_params.get('weight',1.0)
         loss_weight_l.append(loss_weight)
         logging.info(f'----loss:{key}')
@@ -40,47 +48,27 @@ def make_loss(loss_cfg: dict, **params):
         weight_per_loss_l.append(weight_per_loss)
         logging.info(f'------list_weight(if need):{weight_per_loss}')
 
-    def loss_func(inputs, feats, targets):
+    def loss_func(**kwargs):
         '''
         define loss function
-        :param inputs: output of classify layer
-        :param feats: features
-        :param targets: labels
-        :return: total_loss, loss_value:list, loss_name:list
         '''
-        total_loss = 0.0
+        total_loss = []
         loss_value_l = []
         loss_name = []
         for i, loss in enumerate(loss_func_l):
-            if loss_input[i] == 'score':
-                # compute loss related with classify, such as cross entropy loss
-                if isinstance(inputs, list):    # for list input
-                    loss_value = torch.tensor(0.0).to(targets.device)
-                    for j, input in enumerate(inputs):
-                        loss_value_per = loss(input, targets)
-                        loss_value += loss_value_per * weight_per_loss_l[i][j]
-                        loss_value_l.append(float(loss_value_per.cpu()))
-                        loss_name.append(loss_name_l[i]+f'_{j}')
-                else:
-                    loss_value = loss(inputs, targets)
-                    loss_value_l.append(float(loss_value.cpu()))
-                    loss_name.append(loss_name_l[i])
-            elif loss_input[i] == 'feature':
-                # compute loss related with feature distance, such as triplet loss
-                if isinstance(feats, list):     # for list input
-                    loss_value = torch.tensor(0.0).to(targets.device)
-                    for j, feat in enumerate(feats):
-                        loss_value_per = loss(feat, targets)
-                        loss_value += loss_value_per * weight_per_loss_l[i][j]
-                        loss_value_l.append(float(loss_value_per.cpu()))
-                        loss_name.append(loss_name_l[i]+f'_{j}')
-                else:
-                    loss_value = loss(feats, targets)
-                    loss_value_l.append(float(loss_value.cpu()))
-                    loss_name.append(loss_name_l[i])
+            params_need = loss.__call__.__code__.co_varnames
+            kwargs['input'] = kwargs['score']
+            kwargs['feat'] = kwargs['feature']
+            inputs = dict(filter(lambda x: x[0] in params_need, kwargs.items()))
+            loss_value = loss(**inputs)
+            loss_value_l.append(float(loss_value.cpu()))
+            loss_name.append(loss_name_l[i])
             if torch.isinf(loss_value) or torch.isnan(loss_value):
+                logging.warning(f'Appear Exception Loss: {loss_value}')
                 continue
-            total_loss += loss_weight_l[i] * loss_value
+            total_loss.append(loss_weight_l[i] * loss_value)
+        
+        total_loss = sum(total_loss)
         return total_loss, loss_value_l, loss_name
 
     return loss_func

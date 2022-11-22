@@ -29,7 +29,7 @@ class ModelManager:
         self.net = make_model(cfg.get('network_name'),network_params)
         # data keys which the network input
         self.input_keys = cfg.get('network_inputs', ['img','pid'])
-
+        self.trained_epoches = 0
         # load model trained before
         load_path = cfg.get('load_path', False)
         if type(load_path) is str:
@@ -46,14 +46,11 @@ class ModelManager:
             self.net = nn.DataParallel(self.net)
         self.net.to(self.device)
 
-        self.trained_epoches = 0
+        
         
         
         # loss function
-        if(cfg.get('use_model_loss', False)):
-            self.lossesFunction = self.net.get_loss
-        else:
-            self.lossesFunction = make_loss(cfg.get('loss'), num_classes = class_num)
+        self.lossesFunction = make_loss(cfg.get('loss'), num_classes = class_num)
 
         # optim
         self.optimizer, _ = solver.make_optimizer(cfg_solver=cfg.get('solver'), model=self.net)
@@ -125,8 +122,9 @@ class ModelManager:
                     return
                 else:
                     input_data[l] = data_dict[l].to(self.device)
-            score, feat = self.net(**input_data)
-            total_loss, loss_value, loss_name = self.lossesFunction(score,feat,ids)
+            #score, feat = self.net(**input_data)
+            res = self.net(**input_data)
+            total_loss, loss_value, loss_name = self.lossesFunction(**res, target = ids)
 
             total_loss_l.append(float(total_loss.cpu()))
             loss_value_l.append(loss_value)
@@ -198,7 +196,7 @@ class ModelManager:
                 gCids = np.concatenate((gCids, cids.numpy()), axis=0)
                 #gClothesids = np.concatenate((gClothesids, clothes_ids.numpy()), axis=0)
                 g_img_paths += imgs_path
-        gf = torch.cat(gf, dim=0)
+        gf = torch.cat(gf, dim=0).to(self.device)
 
         logging.info("compute features of query samples")
         qf = []
@@ -224,7 +222,7 @@ class ModelManager:
                 qPids = np.concatenate((qPids, pids.numpy()), axis=0)
                 qCids = np.concatenate((qCids, cids.numpy()), axis=0)
                 q_img_paths += imgs_path
-        qf = torch.cat(qf, dim=0)
+        qf = torch.cat(qf, dim=0).to(self.device)
 
         logging.info("compute dist mat")
         distmat = compute_dis_matrix(qf, gf, self.metrics, is_re_ranking = False)
@@ -233,6 +231,7 @@ class ModelManager:
             q_img_paths = None
             g_img_paths = None
         logging.info("compute rank list and score")
+        #distmat = torch.tensor(distmat).to(self.device)
         cmc_s, mAP_s, mINP_s, res_vis = eval_func(distmat, qPids, gPids, qCids, gCids,
                                                   q_img_paths=q_img_paths,g_img_paths=g_img_paths)
         logging.info(f'test result:[rank-1:{cmc_s[0]:.2%}],[rank-3:{cmc_s[2]:.2%}]'

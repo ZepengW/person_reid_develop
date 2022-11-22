@@ -258,10 +258,10 @@ class TransReID(nn.Module):
             cls_score_2 = self.classifier_2(local_feat_2_bn)
             cls_score_3 = self.classifier_3(local_feat_3_bn)
             cls_score_4 = self.classifier_4(local_feat_4_bn)
-            return [cls_score, cls_score_1, cls_score_2, cls_score_3,
-                        cls_score_4
-                        ], [global_feat, local_feat_1, local_feat_2, local_feat_3,
-                            local_feat_4]  # global feature for triplet loss
+            return {
+                'score': [cls_score, cls_score_1, cls_score_2, cls_score_3, cls_score_4], 
+                'feature': [global_feat, local_feat_1, local_feat_2, local_feat_3, local_feat_4]  # global feature for triplet loss
+            }
         else:
             if self.neck_feat == 'after':
                 return torch.cat(
@@ -281,3 +281,4 @@ class TransReID(nn.Module):
         for i in param_dict:
             self.state_dict()[i].copy_(param_dict[i])
         print('Loading pretrained model for finetuning from {}'.format(model_path))
+
