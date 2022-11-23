@@ -34,11 +34,14 @@ class ModelManager:
         load_path = cfg.get('load_path', False)
         if type(load_path) is str:
             logging.info(f'loading model: {load_path}' )
-            self.net.load_state_dict(torch.load(load_path))
+            try:
+                self.net.load_state_dict(torch.load(load_path))
+            except:
+                logging.warning('Some layers are not same between model and pth')
+                self.net.load_state_dict(torch.load(load_path), strict=False)
             logging.info('load finish!')
         elif type(load_path) is bool:
-            if load_path:
-                self.trained_epoches = self.load_model(self.net, cfg.get('save_name','model-no-name'))
+            self.trained_epoches = self.load_model(self.net, cfg.get('save_name','model-no-name'))
 
 
         # Multi-GPU Set
@@ -79,7 +82,11 @@ class ModelManager:
         epoch_longest = max([int(n.split('_')[-1].split('.')[0]) for n in pkl_l])
         file_name = name + '_' + str(epoch_longest) + '.pkl'
         logging.info('loading model: ' + file_name)
-        model.load_state_dict(torch.load(os.path.join('./output', file_name)))
+        try:
+            model.load_state_dict(torch.load(os.path.join('./output', file_name)))
+        except:
+            logging.warning('Some layers are not same between model and pth')
+            model.load_state_dict(torch.load(os.path.join('./output', file_name)), strict=False)
         logging.info('load finish!')
         return epoch_longest
 

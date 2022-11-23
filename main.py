@@ -27,21 +27,21 @@ def set_seed(seed):
 
 # set cuda visible devices, and return the first gpu device
 def set_gpus_env(gpu_ids):
-    os.environ['CUDA_VISIBLE_DEVICES'] = ','.join([str(id) for id in gpu_ids])
+    # os.environ['CUDA_VISIBLE_DEVICES'] = ','.join([str(id) for id in gpu_ids])
     if not torch.cuda.is_available():
         logging.warning('Cuda is not available using cpu')
         return torch.device('cpu')
-    gpus_count = torch.cuda.device_count()
-    for gpu_id in gpu_ids:
-        if gpu_ids.index(gpu_id) >= gpus_count:
-            logging.warning('gpu id:{0} exceeds the limit , which only have {1} gpus'.format(gpu_id, gpus_count))
-            gpu_ids.remove(gpu_id)
-        logging.info(
-            'using gpu: id is ' + str(gpu_id) + ' name is ' + torch.cuda.get_device_name(gpu_ids.index(gpu_id)))
-    if len(gpu_ids) == 0:
-        gpu_ids.append(0)
-        logging.warning('all the config gpus can not be used, use gpu:0')
-    return torch.device('cuda:0')
+    # gpus_count = torch.cuda.device_count()
+    # for gpu_id in gpu_ids:
+    #     if gpu_ids.index(gpu_id) >= gpus_count:
+    #         logging.warning('gpu id:{0} exceeds the limit , which only have {1} gpus'.format(gpu_id, gpus_count))
+    #         gpu_ids.remove(gpu_id)
+    #     logging.info(
+    #         'using gpu: id is ' + str(gpu_id) + ' name is ' + torch.cuda.get_device_name(gpu_ids.index(gpu_id)))
+    # if len(gpu_ids) == 0:
+    #     gpu_ids.append(0)
+    #     logging.warning('all the config gpus can not be used, use gpu:0')
+    return torch.device('cuda')
 
 
 def main(config, writer_tensorboardX):

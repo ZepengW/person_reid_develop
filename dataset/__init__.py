@@ -8,6 +8,8 @@ from dataset.dataset_duke import Duke
 from dataset.dataset_market import Market
 from dataset.dataset_msmt import MSMT17
 from dataset.dataset_mars import Mars
+from dataset.dataset_occludedreid import OccludedReID
+from dataset.dataset_partialreid import  PartialReID
 import numpy as np
 import dataset.method_reading as m
 import logging
@@ -15,8 +17,11 @@ import logging
 DATASET_MAP = {
     'market': Market,
     'duke': Duke,
+    'occ-duke': Duke,
     'msmt17': MSMT17,
-    'mars': Mars
+    'occ-reid': OccludedReID,
+    'partial-reid': PartialReID,
+    'mars': Mars,
 }
 __factory_reading_m = {
     'get_img': m.GetImg

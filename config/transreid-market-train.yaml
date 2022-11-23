@@ -1,0 +1,71 @@
+mode: train
+task-name: TransReID-Market-revise
+gpu: [0]
+
+
+model-manager:
+  network_name: transreid # the network model
+  save_name: TransReID-Market-revise
+  network-params: # the params used to create model
+    PRETRAIN_CHOICE: 'imagenet'
+    PRETRAIN_PATH: './pretrained/jx_vit_base_p16_224-80ecf9dd.pth'
+    METRIC_LOSS_TYPE: 'triplet'
+    IF_LABELSMOOTH: 'off'
+    IF_WITH_CENTER: 'no'
+    NAME: 'transformer'
+    NO_MARGIN: True
+    TRANSFORMER_TYPE: 'vit_base_patch16_224_TransReID'
+    STRIDE_SIZE: [ 12, 12 ]
+    SIE_CAMERA: True
+    SIE_COE: 3.0
+    JPM: True
+    RE_ARRANGE: True
+    CAMERA_NUM: 6
+    SIZE_INPUT: [256, 128]
+  network_inputs: ['img','camera_id'] # the data dict keys which the network input
+  epoch: 120
+  solver:
+    optimizer: SGD
+    base_lr: 0.008
+    bias_lr_factor: 2
+    cosine_mergin: 0.5
+    weight_decay: 0.0001
+    weight_decay_bias: 0.0001
+    warmup_epochs: 5
+    max_epoch: 120
+  loss:
+    use_loss: ['xent', 'triplet']
+    triplet:
+      weight: 1.0
+      params:
+        list_weight: [0.5,0.125,0.125,0.125,0.125]  # for output feature is list
+    xent:
+      weight: 1.0
+      params:
+        list_weight: [0.5,0.125,0.125,0.125,0.125] # for output score is list
+  re_ranking: False
+
+
+dataset:
+  dataset_name: market
+  dataset_path: ../dataset/market1501
+  num_workers: 8
+  batch_size_train: 64
+  reading_method_train:
+    name: get_img
+    # define other parameter, such as image size
+    image_size: [ 256, 128 ]
+    mean: [0.5, 0.5, 0.5]
+    std: [0.5, 0.5, 0.5]
+    type: train
+  batch_size_test: 128
+  reading_method_test:
+    name: get_img
+    # define other parameter, such as image size
+    image_size: [ 256, 128 ]
+    mean: [ 0.5, 0.5, 0.5 ]
+    std: [ 0.5, 0.5, 0.5 ]
+    type: test
+  type: image
+
+
