@@ -3,7 +3,7 @@ from typing import Dict, Any
 import torch
 
 
-class Scheduler:
+class Scheduler(torch.optim.lr_scheduler.LRScheduler):
     """ Parameter Scheduler Base Class
     A scheduler base class that can be used to schedule any optimizer parameter groups.
 
@@ -30,10 +30,11 @@ class Scheduler:
                  noise_pct=0.67,
                  noise_std=1.0,
                  noise_seed=None,
-                 initialize: bool = True) -> None:
-        self.optimizer = optimizer
+                 initialize: bool = True,
+                 last_epoch=-1) -> None:
         self.param_group_field = param_group_field
         self._initial_param_group_field = f"initial_{param_group_field}"
+        self.optimizer = optimizer
         if initialize:
             for i, group in enumerate(self.optimizer.param_groups):
                 if param_group_field not in group:
@@ -51,9 +52,7 @@ class Scheduler:
         self.noise_std = noise_std
         self.noise_seed = noise_seed if noise_seed is not None else 42
         self.update_groups(self.base_values)
-
-    def state_dict(self) -> Dict[str, Any]:
-        return {key: value for key, value in self.__dict__.items() if key != 'optimizer'}
+        self.last_epoch = last_epoch
 
     def load_state_dict(self, state_dict: Dict[str, Any]) -> None:
         self.__dict__.update(state_dict)
@@ -64,18 +63,26 @@ class Scheduler:
     def get_update_values(self, num_updates: int):
         return None
 
-    def step(self, epoch: int, metric: float = None) -> None:
+    def step(self, epoch: int = None, metric: float = None) -> None:
         self.metric = metric
-        values = self.get_epoch_values(epoch)
+        self.last_epoch += 1
+        if epoch is None:
+            self.last_epoch += 1
+            values = self.get_epoch_values(self.last_epoch)
+            if values is not None:
+                values = self._add_noise(values, epoch)
+                self.update_groups(values)
+        else:
+            self.step_update(epoch=epoch, metric=metric)
+
+
+
+    def step_update(self, epoch: int, metric: float = None):
+        self.metric = metric
+        values = self.get_update_values(epoch)
+        self.last_epoch = epoch
         if values is not None:
             values = self._add_noise(values, epoch)
-            self.update_groups(values)
-
-    def step_update(self, num_updates: int, metric: float = None):
-        self.metric = metric
-        values = self.get_update_values(num_updates)
-        if values is not None:
-            values = self._add_noise(values, num_updates)
             self.update_groups(values)
 
     def update_groups(self, values):

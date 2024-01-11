@@ -1,135 +1,92 @@
+import comet_ml
+from utils.logger import logger as logging
 import argparse
 import torch
 import os
-import logging
-import datetime
-from dataset import transforms as tf
+from lightning import seed_everything
+from lightning.pytorch.loggers import CometLogger
+import lightning as L
 from dataset import DatasetManager, initial_m_reading
 from model import ModelManager
 from torch.utils.data import DataLoader
 import yaml
-import numpy as np
-import random
-from torch.utils.tensorboard import SummaryWriter
 from dataset.sampler import RandomIdentitySampler
-import tools
 
 
 def set_seed(seed):
-    torch.manual_seed(seed)
-    torch.cuda.manual_seed(seed)
-    torch.cuda.manual_seed_all(seed)
-    np.random.seed(seed)
-    random.seed(seed)
+    seed_everything(seed)
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = True
 
 
-# set cuda visible devices, and return the first gpu device
-def set_gpus_env(gpu_ids):
-    # os.environ['CUDA_VISIBLE_DEVICES'] = ','.join([str(id) for id in gpu_ids])
-    if not torch.cuda.is_available():
-        logging.warning('Cuda is not available using cpu')
-        return torch.device('cpu')
-    # gpus_count = torch.cuda.device_count()
-    # for gpu_id in gpu_ids:
-    #     if gpu_ids.index(gpu_id) >= gpus_count:
-    #         logging.warning('gpu id:{0} exceeds the limit , which only have {1} gpus'.format(gpu_id, gpus_count))
-    #         gpu_ids.remove(gpu_id)
-    #     logging.info(
-    #         'using gpu: id is ' + str(gpu_id) + ' name is ' + torch.cuda.get_device_name(gpu_ids.index(gpu_id)))
-    # if len(gpu_ids) == 0:
-    #     gpu_ids.append(0)
-    #     logging.warning('all the config gpus can not be used, use gpu:0')
-    return torch.device('cuda')
+def main(cfg_dict: dict, logger_comet: CometLogger):
+    set_seed(cfg_dict.get('seed', 1234))
 
-
-def main(config, writer_tensorboardX):
-    set_seed(config.get('seed', 1234))
-    device = set_gpus_env(config.get('gpu', [0]))
-    mode = config.get('mode', 'train')
-    model_config = config.get('model-manager', dict())
-
-    # Statistical parameters and Flops
-    if mode == 'statistics':
-        model = ModelManager(model_config, device)
-        if not 'inputs_shape' in model_config.keys():
-            logging.error('Input the inputs shape')
-            return
-        input_shape_l = model_config.get('inputs_shape')
-        model.check_model_params(input_shape_l)
-        return
-
-    # vis config
-    cfg_vis = config.get('vis_params', dict())
-    vis_bool = cfg_vis.get('vis', False)  # draw feature distribution
-    vis_interval = cfg_vis.get('vis_interval', 20)  # interval of drawing feature distribution
-    eval_interval = config.get('eval_interval', 20)
-
-    dataset_config = config.get('dataset', dict())
-    log_dataset_config(dataset_config)
+    mode = cfg_dict.get('mode', 'train')
+    model_config = cfg_dict.get('model-manager', dict())
+    model = ModelManager(model_config)
+    job = L.Trainer(
+        accelerator='cpu' if cfg_dict.get('gpus', 'auto') == -1 else 'gpu',
+        devices=cfg_dict.get('gpus', 'auto'),
+        precision=cfg_dict.get('precision', 32),
+        max_epochs=model_config.get('epoch', 100),
+        check_val_every_n_epoch=cfg_dict.get('eval_interval', 10),
+        logger=logger_comet,
+        default_root_dir=os.path.join('output', logger_comet.experiment.get_name()) \
+            if logger_comet is not None else None
+    )
+    # initial dataset
+    dataset_config = cfg_dict.get('dataset', dict())
     dataset_manager = DatasetManager(dataset_config.get('dataset_name', ''), dataset_config.get('dataset_path', ''))
-
-    model = ModelManager(model_config, device, class_num=dataset_manager.get_train_pid_num(),
-                         writer=writer_tensorboardX)
-    dataset_type = dataset_config.get('type', 'image')
     get_dataset = dataset_manager.get_dataset_image  # support image reading for now
-    # get reading method
-    m_reading_train_cfg = dataset_config.get('reading_method_train')
-    m_reading_test_cfg = dataset_config.get('reading_method_test')
-    m_reading_train = initial_m_reading(m_reading_train_cfg.get('name'), **m_reading_train_cfg)
-    m_reading_test = initial_m_reading(m_reading_test_cfg.get('name'), **m_reading_test_cfg)
     if 'train' == mode:
-        logging.info("loading train data")
+        logging.info('Begin to Train')
+        # load dataset
+        # reading method for train
+        m_reading_train_cfg = dataset_config.get('reading_method_train')
+        m_reading_train = initial_m_reading(m_reading_train_cfg.get('name'), **m_reading_train_cfg)
+        # reading method for test
+        m_reading_test_cfg = dataset_config.get('reading_method_test')
+        m_reading_test = initial_m_reading(m_reading_test_cfg.get('name'), **m_reading_test_cfg)
         batch_size_train = dataset_config.get('batch_size_train', 16)
-        num_instance = dataset_config.get('num_instance', 4)  # number of person with same id
-        dataset_train = get_dataset('train', m_reading_train)
+        num_instance = dataset_config.get('num_instance', 4)
         data_sampler = RandomIdentitySampler(dataset_manager.get_dataset_list('train'),
                                              batch_size_train,
                                              num_instance)
-        loader_train_source = DataLoader(
-            dataset_train,
+        loader_train = DataLoader(
+            get_dataset('train', m_reading_train),
             batch_size=batch_size_train,
             num_workers=dataset_config.get('num_workers', 8),
             sampler=data_sampler
         )
-        logging.info("load train data finish")
-        logging.info("loading test data")
-        loader_gallery_source = DataLoader(
+        loader_gallery = DataLoader(
             get_dataset('test', m_reading_test),
             batch_size=dataset_config.get('batch_size_test', 16),
             num_workers=dataset_config.get('num_workers', 8),
             drop_last=False,
             shuffle=False
         )
-        loader_query_source = DataLoader(
+        loader_query = DataLoader(
             get_dataset('query', m_reading_test),
             batch_size=dataset_config.get('batch_size_test', 16),
             num_workers=dataset_config.get('num_workers', 8),
             drop_last=False,
             shuffle=False
         )
-        logging.info("load test data finish")
-        logging.info("prepare to train from epoch[{0}] to epoch[{1}]".format(model.trained_epoches,
-                                                                             model_config.get('epoch', 64)))
-        for i in range(model.trained_epoches + 1, model_config.get('epoch', 64) + 1):
-            is_vis = (i % vis_interval == 0 or i == model_config.get('epoch', 64))  # each vis_interval or last epoch
-            is_vis = is_vis and vis_bool
-            model.train(loader_train_source, i, is_vis)
-            if (i % eval_interval == 0) or i == model_config.get('epoch', 64):
-                model.test(loader_query_source, loader_gallery_source, epoch=i, is_vis=is_vis,
-                           sample_method=cfg_vis.get('vis_img_func', 'random'),
-                           sample_num=cfg_vis.get('vis_img_num', '100'))
+        job.fit(model, loader_train, [loader_gallery, loader_query])
     elif 'test' == mode:
+        # reading method for test
+        m_reading_test_cfg = dataset_config.get('reading_method_test')
+        m_reading_test = initial_m_reading(m_reading_test_cfg.get('name'), **m_reading_test_cfg)
         logging.info("loading test data")
-        loader_gallery_source = DataLoader(
+        loader_gallery = DataLoader(
             get_dataset('test', m_reading_test),
             batch_size=dataset_config.get('batch_size_test', 16),
             num_workers=dataset_config.get('num_workers', 8),
             drop_last=False,
             shuffle=False
         )
-        loader_query_source = DataLoader(
+        loader_query = DataLoader(
             get_dataset('query', m_reading_test),
             batch_size=dataset_config.get('batch_size_test', 16),
             num_workers=dataset_config.get('num_workers', 8),
@@ -137,56 +94,11 @@ def main(config, writer_tensorboardX):
             shuffle=False
         )
         logging.info("load test data finish")
-        model.test(loader_query_source, loader_gallery_source, is_vis=vis_bool,
-                   sample_method=cfg_vis.get('vis_img_func', 'random'),
-                   sample_num=cfg_vis.get('vis_img_num', '100'))
+        job.test(model, [loader_gallery, loader_query])
     else:
         logging.error(f'not support mode:{mode}')
 
     logging.info("finish!")
-
-
-def init_logging(task_name='', is_save=True):
-    # log config
-    log_dir_name = ''
-    if is_save:
-        log_dir_name = str(datetime.datetime.now().year).rjust(4, '0') \
-                       + str(datetime.datetime.now().month).rjust(2, '0') \
-                       + str(datetime.datetime.now().day).rjust(2, '0') \
-                       + str(datetime.datetime.now().hour).rjust(2, '0') \
-                       + str(datetime.datetime.now().minute).rjust(2, '0') \
-                       + str(datetime.datetime.now().second).rjust(2, '0')
-        if task_name != '':
-            log_dir_name = f'{task_name}-{log_dir_name}'
-        if not os.path.isdir(f'./output/log/{log_dir_name}'):
-            os.mkdir(f'./output/log/{log_dir_name}')
-        logging.basicConfig(filename=f'./output/log/{log_dir_name}/log.txt',
-                            level=logging.INFO,
-                            format='###%(levelname)s###[%(asctime)s]%(message)s',
-                            datefmt='%Y-%m-%d %H:%M:%S')
-        print(f'writing log to ./output/log/{log_dir_name}')
-    else:
-        logging.basicConfig(filename=f'./log.txt',
-                            level=logging.INFO,
-                            format='###%(levelname)s###[%(asctime)s]%(message)s',
-                            datefmt='%Y-%m-%d %H:%M:%S')
-    console = logging.StreamHandler()
-    console.setLevel(logging.INFO)
-    console.setFormatter(logging.Formatter('[%(asctime)s]%(message)s', datefmt='%Y-%m-%d %H:%M:%S'))
-    logging.getLogger().addHandler(console)
-    return log_dir_name
-
-
-def log_dataset_config(dataset_config: dict):
-    logging.info('=> DataSet Info:')
-    logging.info(f'----dataset:{dataset_config.get("dataset_name")}')
-    logging.info(f'----path:{dataset_config.get("dataset_path")}')
-    logging.info(f'----img_size:{dataset_config.get("image_size", [256, 128])}')
-    logging.info(f'----batch_size_train:{dataset_config.get("batch_size_train", 16)}')
-    logging.info(f'----num_instance:{dataset_config.get("num_instance", 4)}')
-    logging.info(f'----batch_size_test:{dataset_config.get("batch_size_test", 16)}')
-    logging.info(f'----transform method:{dataset_config.get("transform", "None")}')
-    logging.info(f'----num_workers:{dataset_config.get("num_workers", 8)}')
 
 
 def merge_data(data_1, data_2):
@@ -218,50 +130,60 @@ def merge_data(data_1, data_2):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--cfg_base', type=str, default='config/cfg-base.yaml', help='the config file(.yaml)')
-    parser.add_argument('--cfg', type=str, default='config/train-market1501.yaml', help='the config file(.yaml)')
+    parser.add_argument('--cfg', type=str, default='', help='the config file(.yaml)')
     parser.add_argument('--no_log', action='store_true', default=False, help='do not save log file')
+    parser.add_argument('--params', type=str, help='Override parameters in yaml file')
 
     config = parser.parse_args()
     # base config
     cfg_base_path = config.cfg_base
-    if not os.path.exists(cfg_base_path):
-        logging.error(f'can not find the base config file:{cfg_base_path}')
-    with open(cfg_base_path) as f:
-        cfg = f.read()
-        yaml_cfg_base = yaml.safe_load(cfg)
+    if os.path.exists(cfg_base_path):
+        print(f'[Info] loading base config file:{cfg_base_path}')
+        with open(cfg_base_path) as f:
+            cfg = f.read()
+            yaml_cfg_base = yaml.safe_load(cfg)
+    else:
+        print(f'[Warning] can not find the base config file:{cfg_base_path}')
 
     # detail config
     cfg_path = config.cfg
-    if not os.path.exists(cfg_path):
-        logging.error(f'can not find the config file:{cfg_path}')
-    with open(cfg_path) as f:
-        cfg = f.read()
-        yaml_cfg_detail = yaml.safe_load(cfg)
+    if os.path.exists(cfg_path):
+        print(f'[Info] loading the config file:{cfg_path}')
+        with open(cfg_path) as f:
+            cfg = f.read()
+            yaml_cfg_detail = yaml.safe_load(cfg)
+    else:
+        print(f'[Warning] can not find the config file:{cfg_path}')
+        yaml_cfg_detail = dict()
 
-    yaml_cfg = merge_data(yaml_cfg_base, yaml_cfg_detail)
-    if not os.path.isdir('./output'):
-        os.mkdir('./output')
-    if not os.path.isdir('./output/log'):
-        os.mkdir('./output/log')
-
-    yaml_str = str(tools.format_dict(yaml_cfg))
+    cfg_dict = merge_data(yaml_cfg_base, yaml_cfg_detail)
+    # 覆盖yaml文件中的参数
+    if config.params is not None:
+        overrides = config.params.split(',')
+        for override in overrides:
+            key, value = override.split('=')
+            keys = key.split('.')
+            last_key = keys.pop()
+            temp = cfg_dict
+            for k in keys:
+                temp = temp[k]
+            temp[last_key] = type(temp[last_key])(value)
 
     if not config.no_log:
         # initial logging module
-        log_dir_name = init_logging(task_name=yaml_cfg.get('task-name', ''))
-        # initial tensorboardX
-        writer_tensorboardx = SummaryWriter(f'./output/log/{log_dir_name}')
-        # for html display convert
-        yaml_str_html = yaml_str.replace('\n', '<br>')
-        yaml_str_html = yaml_str_html.replace(' ', "&nbsp;")
-        writer_tensorboardx.add_text('config', yaml_str_html)
+        logger_cfg = cfg_dict['logger']
+        logger_comet = CometLogger(
+            api_key=logger_cfg.get('api_key', os.environ.get("COMET_API_KEY")),
+            workspace=logger_cfg.get('workspace', os.environ.get("COMET_WORKSPACE")),  # Optional
+            save_dir="./output",  # Optional
+            project_name=logger_cfg.get('project_name', "reid"),  # Optional
+            rest_api_key=os.environ.get("COMET_REST_API_KEY"),  # Optional
+            experiment_key=os.environ.get("COMET_EXPERIMENT_KEY"),  # Optional
+            experiment_name=logger_cfg.get('task_name', None),  # Optional
+            auto_output_logging='simple'
+        )
+        logging.set_log_file(os.path.join('output', logger_comet.experiment.get_name())+'.log')
+        logger_comet.log_hyperparams(cfg_dict)
     else:
-        init_logging(task_name=yaml_cfg.get('task-name', ''), is_save=False)
-        writer_tensorboardx = None
-
-    logging.info('=> Config File:')
-    logging.info(yaml_str)
-
-    main(yaml_cfg, writer_tensorboardx)
-    if not writer_tensorboardx == None:
-        writer_tensorboardx.close()
+        logger_comet = None
+    main(cfg_dict, logger_comet)

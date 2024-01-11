@@ -1,5 +1,5 @@
 import os.path as osp
-import logging
+from utils.logger import logger as logging
 import numpy as np
 from scipy.io import loadmat
 

@@ -5,11 +5,6 @@ from PIL import Image
 import logging
 import os
 from dataset.transforms import build_transforms, build_transorms_shape, build_transorms_value, build_transforms_bgerase
-import torch
-import numpy as np
-import torchvision.transforms as T
-import json
-from scipy.ndimage.filters import gaussian_filter
 
 
 class GetImg(object):

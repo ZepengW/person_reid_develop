@@ -1,6 +1,6 @@
 import os.path as osp
 import os
-import logging
+from utils.logger import logger as logging
 
 
 class Market(object):

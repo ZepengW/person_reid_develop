@@ -1,4 +1,4 @@
-import logging
+from utils.logger import logger as logging
 from .net.transreid import TransReID
 
 __factory_model = {

@@ -1,8 +1,9 @@
-import logging
+from utils.logger import logger as logging
 from .triplet_loss import TripletLoss, WeightedRegularizedTriplet, CrossEntropyLabelSmooth, SoftTriple
 from .loss_multilabel import XentMultiLabel, XentMultiInput, TripletMultiInput, TripletMultiLabel, SoftlabelTripletMultiInput, XentMultiInputSoftLabel
 import torch
-import torch.nn as nn
+from tabulate import tabulate
+
 LossFactory = {
     'cross_entropy': XentMultiInput,
     'xent': XentMultiInput,
@@ -18,57 +19,46 @@ LossFactory = {
 }
 
 
-def make_loss(loss_cfg: dict, **params):
-    loss_func_l = []
-    loss_weight_l = []
-    loss_name_l = []
-    loss_input = []
-    weight_per_loss_l = []
-    use_loss = loss_cfg.get('use_loss',['cross_entropy'])
-    logging.info(f'=> Initialing Loss Function: {use_loss}')
-    for key in use_loss:
-        if not key in LossFactory.keys():
-            logging.warning(f'Can Not Find Loss Function : {key}')
-            continue
-        loss_params = loss_cfg[key]
-        params_initial = loss_cfg[key].get('params_initial', [])
-        ## get initial param from params
-        params_input = dict()
-        for param_name in params_initial:
-            if param_name in params.keys():
-                params_input[param_name] = params[param_name]
-        loss_func_l.append(LossFactory[key](**params_input, **loss_cfg[key].get('params', dict())))
-        loss_weight = loss_params.get('weight',1.0)
-        loss_weight_l.append(loss_weight)
-        logging.info(f'----loss:{key}')
-        logging.info(f'------weight:{loss_weight}')
-        loss_name_l.append(key)
-        loss_input.append(loss_params.get('except_input'))
-        weight_per_loss = loss_params.get('list_weight', [])
-        weight_per_loss_l.append(weight_per_loss)
-        logging.info(f'------list_weight(if need):{weight_per_loss}')
 
-    def loss_func(**kwargs):
-        '''
-        define loss function
-        '''
-        total_loss = []
-        loss_value_l = []
-        loss_name = []
-        for i, loss in enumerate(loss_func_l):
-            params_need = loss.__call__.__code__.co_varnames
-            kwargs['input'] = kwargs['score']
-            kwargs['feat'] = kwargs['feature']
-            inputs = dict(filter(lambda x: x[0] in params_need, kwargs.items()))
-            loss_value = loss(**inputs)
-            loss_value_l.append(float(loss_value.cpu()))
-            loss_name.append(loss_name_l[i])
-            if torch.isinf(loss_value) or torch.isnan(loss_value):
-                logging.warning(f'Appear Exception Loss: {loss_value}')
-                continue
-            total_loss.append(loss_weight_l[i] * loss_value)
-        
-        total_loss = sum(total_loss)
-        return total_loss, loss_value_l, loss_name
+class LossManager(object):
+    def __init__(self, loss_list):
+        logging.info('Initial Loss Manager -- Begin')
+        self.loss_func_d = dict()
+        self.initial_losses(loss_list)
+        logging.info('Initial Loss Manager -- Finish')
 
-    return loss_func
+    def initial_losses(self, loss_list):
+        tab_headers = ['Name', 'Type', 'Weight']
+        tab_data = []
+
+        for loss_args in loss_list:
+            loss_name = loss_args['name']  # loss name for display
+            loss_type = loss_args['type']  # select loss fuction from __factory_loss
+            loss_kwargs = loss_args.get('kwargs', dict())  # params for initial loss module
+            loss_weight = loss_args.get('weight', 1.0)  # weight of this loss fuction result
+            expect_inputs = loss_args['expect_inputs']  # expected input to this loss function
+            tab_data.append([loss_name, loss_type, loss_weight])
+            if isinstance(expect_inputs, list):
+                expect_inputs = {key: key for key in expect_inputs}  # convert list to dict
+            func_loss = LossFactory[loss_type](**loss_kwargs)
+            self.loss_func_d[loss_name] = [func_loss, loss_weight, expect_inputs]
+
+        # for logging
+        # 将表格格式化为字符串
+        table_str = tabulate(tab_data, tab_headers, tablefmt="grid")
+        # 按行打印表格
+        for line in table_str.split('\n'):
+            logging.info(line)
+
+    def __call__(self, inputs):
+        loss_total = 0
+        loss_dict = {}
+        for loss_name in self.loss_func_d.keys():
+            func_loss, weight_loss, expect_inputs = self.loss_func_d[loss_name]
+            # filter the expected inputs for loss function
+            loss_input = {key: inputs[item] for key, item in expect_inputs.items()}
+            loss_value = func_loss(**loss_input)
+            loss_total += loss_value * weight_loss  # total loss
+            loss_dict[loss_name] = loss_value.clone().detach().cpu()  # log single loss
+        loss_dict['loss'] = loss_total
+        return loss_dict

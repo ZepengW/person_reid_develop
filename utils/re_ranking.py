@@ -24,8 +24,7 @@ Minibatch: avaliable when 'MemorySave' is 'True'
 
 import numpy as np
 import torch
-from sklearn.metrics import pairwise_distances
-import logging
+from utils.logger import logger as logging
 
 
 def compute_dis_matrix(prob_feat, gal_feat, metric, is_re_ranking=True):

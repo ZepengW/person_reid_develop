@@ -4,7 +4,6 @@ from .backbones.resnet import ResNet, Bottleneck
 import copy
 from .backbones.vit_pytorch_transreid import vit_base_patch16_224_TransReID, vit_small_patch16_224_TransReID, deit_small_patch16_224_TransReID
 
-
 __factory_T_type = {
     'vit_base_patch16_224_TransReID': vit_base_patch16_224_TransReID,
     'deit_base_patch16_224_TransReID': vit_base_patch16_224_TransReID,
@@ -259,16 +258,17 @@ class TransReID(nn.Module):
             cls_score_3 = self.classifier_3(local_feat_3_bn)
             cls_score_4 = self.classifier_4(local_feat_4_bn)
             return {
+                'pred': torch.nn.functional.softmax(cls_score, dim = 1),
                 'score': [cls_score, cls_score_1, cls_score_2, cls_score_3, cls_score_4], 
-                'feature': [global_feat, local_feat_1, local_feat_2, local_feat_3, local_feat_4]  # global feature for triplet loss
+                'feat': [global_feat, local_feat_1, local_feat_2, local_feat_3, local_feat_4]  # global feature for triplet loss
             }
         else:
             if self.neck_feat == 'after':
-                return torch.cat(
-                    [feat, local_feat_1_bn / 4, local_feat_2_bn / 4, local_feat_3_bn / 4, local_feat_4_bn / 4], dim=1)
+                return {'feat': torch.cat(
+                    [feat, local_feat_1_bn / 4, local_feat_2_bn / 4, local_feat_3_bn / 4, local_feat_4_bn / 4], dim=1)}
             else:
-                return torch.cat(
-                    [global_feat, local_feat_1 / 4, local_feat_2 / 4, local_feat_3 / 4, local_feat_4 / 4], dim=1)
+                return {'feat': torch.cat(
+                    [global_feat, local_feat_1 / 4, local_feat_2 / 4, local_feat_3 / 4, local_feat_4 / 4], dim=1)}
 
     def load_param(self, trained_path):
         param_dict = torch.load(trained_path)

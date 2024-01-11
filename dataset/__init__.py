@@ -1,8 +1,3 @@
-import random
-
-import torch
-import os.path as osp
-from PIL import Image
 from torch.utils.data import Dataset
 from dataset.dataset_duke import Duke
 from dataset.dataset_market import Market
@@ -10,9 +5,8 @@ from dataset.dataset_msmt import MSMT17
 from dataset.dataset_mars import Mars
 from dataset.dataset_occludedreid import OccludedReID
 from dataset.dataset_partialreid import  PartialReID
-import numpy as np
 import dataset.method_reading as m
-import logging
+from utils.logger import logger as logging
 
 DATASET_MAP = {
     'market': Market,
