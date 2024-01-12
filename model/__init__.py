@@ -1,7 +1,7 @@
 from typing import Optional, Union, Callable, Any
 
 import torch
-from lightning.pytorch.utilities.types import _METRIC, EVAL_DATALOADERS, TRAIN_DATALOADERS
+from lightning.pytorch.utilities.types import _METRIC, EVAL_DATALOADERS, TRAIN_DATALOADERS, STEP_OUTPUT
 
 from utils.eval_reid import eval_func
 from utils.re_ranking import compute_dis_matrix
@@ -135,15 +135,15 @@ class ModelManager(L.LightningModule):
         loss_dict = self.loss_f(batch)
         # calculate acc
         self.metric_train(output_data['pred'], batch['pid'])
+        self.log(f'train/acc', self.metric_train, on_epoch=True, on_step=False, prog_bar=False, logger=True)
         for key, item in loss_dict.items():
             self.log(f"train/{key}", item.item(),
                      on_step=True, on_epoch=True, prog_bar=(key == 'loss'), logger=True)
         return loss_dict['loss']
 
-    def on_train_epoch_end(self) -> None:
-        self.log(f"train/acc", self.metric_train, on_step=False, on_epoch=True, prog_bar=True, logger=True)
-        logging.info(f'[Train|E{self.current_epoch:0>4d}] Acc:{self.metric_train.compute():>4.2%}')
-        self.metric_train.reset()
+    # def on_train_epoch_end(self) -> None:
+    #     logging.info(f'[Train|E{self.current_epoch:0>4d}]')
+    #     self.metric_train.reset()
 
     def on_validation_epoch_start(self) -> None:
         logging.info('Begin to Validation')
@@ -224,6 +224,6 @@ class ModelManager(L.LightningModule):
         # Call the validation_step method for testing
         self.validation_step(batch, batch_idx, dataloader_idx)
 
-    def test_epoch_end(self):
+    def on_test_epoch_end(self):
         # Call the on_validation_epoch_end method for testing
         self.on_validation_epoch_end()

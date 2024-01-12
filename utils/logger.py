@@ -33,9 +33,6 @@ class Logger:
         self.file_handler.setFormatter(logging.Formatter('%(asctime)s - %(message)s', "%Y-%m-%d %H:%M:%S"))
         self.logger.addHandler(self.file_handler)
 
-        # Remove console handler to avoid duplicate output
-        self.logger.removeHandler(self.console_handler)
-
     def info(self, message):
         self._log(message, logging.INFO)
 

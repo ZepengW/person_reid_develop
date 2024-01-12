@@ -45,7 +45,8 @@ def main(cfg_dict: dict, logger_comet: CometLogger):
         check_val_every_n_epoch=cfg_dict.get('eval_interval', 10),
         enable_checkpointing=True,
         logger=logger_comet,
-        default_root_dir=os.path.join('output', exp_name)
+        default_root_dir=os.path.join('output', exp_name),
+        log_every_n_steps=20
     )
     # initial dataset
     dataset_config = cfg_dict.get('dataset', dict())
