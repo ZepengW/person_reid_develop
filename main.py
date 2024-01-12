@@ -1,16 +1,18 @@
 import comet_ml
-from utils.logger import logger as logging
+from utils.logger import Logger
+logging = Logger()
 import argparse
 import torch
 import os
 from lightning import seed_everything
 from lightning.pytorch.loggers import CometLogger
-import lightning as L
+from lightning.pytorch.callbacks import ModelCheckpoint
+import lightning.pytorch as Lp
 from dataset import DatasetManager, initial_m_reading
 from model import ModelManager
 from torch.utils.data import DataLoader
 import yaml
-from dataset.sampler import RandomIdentitySampler
+
 
 
 def set_seed(seed):
@@ -21,80 +23,45 @@ def set_seed(seed):
 
 def main(cfg_dict: dict, logger_comet: CometLogger):
     set_seed(cfg_dict.get('seed', 1234))
-
-    mode = cfg_dict.get('mode', 'train')
     model_config = cfg_dict.get('model-manager', dict())
-    model = ModelManager(model_config)
-    job = L.Trainer(
+
+    # callback
+    exp_name = cfg_dict['logger']['task_name']
+    dir_weights = os.path.join('output', exp_name, 'weights')
+    os.makedirs(dir_weights, exist_ok=True)
+    checkpoint_callback = ModelCheckpoint(
+        monitor='val/mAP',
+        dirpath=dir_weights,
+        filename='E{epoch}-mAP={val/mAP:.2%}'
+    )
+    # Trainer for Lightning
+    job = Lp.Trainer(
+        callbacks=[checkpoint_callback],
         accelerator='cpu' if cfg_dict.get('gpus', 'auto') == -1 else 'gpu',
         devices=cfg_dict.get('gpus', 'auto'),
         precision=cfg_dict.get('precision', 32),
+        min_epochs=model_config.get('epoch', 100),
         max_epochs=model_config.get('epoch', 100),
         check_val_every_n_epoch=cfg_dict.get('eval_interval', 10),
+        enable_checkpointing=True,
         logger=logger_comet,
-        default_root_dir=os.path.join('output', logger_comet.experiment.get_name()) \
-            if logger_comet is not None else None
+        default_root_dir=os.path.join('output', exp_name)
     )
     # initial dataset
     dataset_config = cfg_dict.get('dataset', dict())
     dataset_manager = DatasetManager(dataset_config.get('dataset_name', ''), dataset_config.get('dataset_path', ''))
     get_dataset = dataset_manager.get_dataset_image  # support image reading for now
+    # initial model
+    mode = cfg_dict.get('mode', 'train')
+    model = ModelManager(model_config, dataset_config)
     if 'train' == mode:
-        logging.info('Begin to Train')
-        # load dataset
-        # reading method for train
-        m_reading_train_cfg = dataset_config.get('reading_method_train')
-        m_reading_train = initial_m_reading(m_reading_train_cfg.get('name'), **m_reading_train_cfg)
-        # reading method for test
-        m_reading_test_cfg = dataset_config.get('reading_method_test')
-        m_reading_test = initial_m_reading(m_reading_test_cfg.get('name'), **m_reading_test_cfg)
-        batch_size_train = dataset_config.get('batch_size_train', 16)
-        num_instance = dataset_config.get('num_instance', 4)
-        data_sampler = RandomIdentitySampler(dataset_manager.get_dataset_list('train'),
-                                             batch_size_train,
-                                             num_instance)
-        loader_train = DataLoader(
-            get_dataset('train', m_reading_train),
-            batch_size=batch_size_train,
-            num_workers=dataset_config.get('num_workers', 8),
-            sampler=data_sampler
-        )
-        loader_gallery = DataLoader(
-            get_dataset('test', m_reading_test),
-            batch_size=dataset_config.get('batch_size_test', 16),
-            num_workers=dataset_config.get('num_workers', 8),
-            drop_last=False,
-            shuffle=False
-        )
-        loader_query = DataLoader(
-            get_dataset('query', m_reading_test),
-            batch_size=dataset_config.get('batch_size_test', 16),
-            num_workers=dataset_config.get('num_workers', 8),
-            drop_last=False,
-            shuffle=False
-        )
-        job.fit(model, loader_train, [loader_gallery, loader_query])
+        logging.info('Begin to train')
+        job.fit(model)
+        logging.info('End train')
     elif 'test' == mode:
-        # reading method for test
-        m_reading_test_cfg = dataset_config.get('reading_method_test')
-        m_reading_test = initial_m_reading(m_reading_test_cfg.get('name'), **m_reading_test_cfg)
-        logging.info("loading test data")
-        loader_gallery = DataLoader(
-            get_dataset('test', m_reading_test),
-            batch_size=dataset_config.get('batch_size_test', 16),
-            num_workers=dataset_config.get('num_workers', 8),
-            drop_last=False,
-            shuffle=False
-        )
-        loader_query = DataLoader(
-            get_dataset('query', m_reading_test),
-            batch_size=dataset_config.get('batch_size_test', 16),
-            num_workers=dataset_config.get('num_workers', 8),
-            drop_last=False,
-            shuffle=False
-        )
-        logging.info("load test data finish")
-        job.test(model, [loader_gallery, loader_query])
+        logging.info('Begin to test')
+        job.test(model)
+        logging.info('End test')
     else:
         logging.error(f'not support mode:{mode}')
 
@@ -182,7 +149,7 @@ if __name__ == '__main__':
             experiment_name=logger_cfg.get('task_name', None),  # Optional
             auto_output_logging='simple'
         )
-        logging.set_log_file(os.path.join('output', logger_comet.experiment.get_name())+'.log')
+        logging.set_log_file(os.path.join('output', logger_comet.experiment.get_name(), logger_comet.experiment.get_name())+'.log')
         logger_comet.log_hyperparams(cfg_dict)
     else:
         logger_comet = None

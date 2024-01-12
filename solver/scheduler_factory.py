@@ -1,10 +1,10 @@
 """ Scheduler Factory
 Hacked together by / Copyright 2020 Ross Wightman
 """
-import imp
 from .cosine_lr import CosineLRScheduler
 import torch.optim.lr_scheduler as LrS 
-import logging
+from utils.logger import Logger
+logging = Logger()
 
 def create_scheduler(cfg_solver, optimizer):
     scheduler_type = cfg_solver.get('scheduler_type', 'cosine').lower()

@@ -24,7 +24,8 @@ Minibatch: avaliable when 'MemorySave' is 'True'
 
 import numpy as np
 import torch
-from utils.logger import logger as logging
+from utils.logger import Logger
+logging = Logger()
 
 
 def compute_dis_matrix(prob_feat, gal_feat, metric, is_re_ranking=True):

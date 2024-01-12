@@ -2,7 +2,8 @@
 this file contains method of reading dataset
 '''
 from PIL import Image
-import logging
+from utils.logger import Logger
+logging = Logger()
 import os
 from dataset.transforms import build_transforms, build_transorms_shape, build_transorms_value, build_transforms_bgerase
 

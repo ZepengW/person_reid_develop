@@ -1,35 +1,89 @@
+from typing import Optional, Union, Callable, Any
+
 import torch
+from lightning.pytorch.utilities.types import _METRIC, EVAL_DATALOADERS, TRAIN_DATALOADERS
+
 from utils.eval_reid import eval_func
 from utils.re_ranking import compute_dis_matrix
 from model.model_factory import make_model
 import solver
 from loss import LossManager
 import lightning as L
-from utils.logger import logger
+from utils.logger import Logger
+logging = Logger()
 from torchmetrics import Accuracy
-
+from dataset import DatasetManager, initial_m_reading
+from dataset.sampler import RandomIdentitySampler
+from torch.utils.data import DataLoader
 
 class ModelManager(L.LightningModule):
-    def __init__(self, cfg: dict):
+    def __init__(self, cfg_model: dict, cfg_data: dict=None):
         super().__init__()
         # add your own network here
-        network_params = cfg.get('network-params', dict())
-        self.net = make_model(cfg.get('network_name'), network_params)
+        network_params = cfg_model.get('network-params', dict())
+        self.net = make_model(cfg_model.get('network_name'), network_params)
         # data keys which the network input
-        self.data_input_l = cfg.get('network_inputs', ['img', 'pid'])
+        self.data_input_l = cfg_model.get('network_inputs', ['img', 'pid'])
         if isinstance(self.data_input_l, list):
             self.data_input_l = {key: key for key in self.data_input_l}
 
         # loss function
-        self.loss_f = LossManager(cfg.get('loss'))
+        self.loss_f = LossManager(cfg_model.get('loss'))
 
         # optim
-        self.cfg_solver = cfg.get('solver')
+        self.cfg_solver = cfg_model.get('solver')
+
 
         # metric
-        self.metrics = cfg.get('metric', 'euclidean')
-        self.re_ranking = cfg.get('re_ranking', True)
+        self.metrics = cfg_model.get('metric', 'euclidean')
+        self.re_ranking = cfg_model.get('re_ranking', True)
         self.metric_train = Accuracy(task='multiclass', num_classes=network_params.get('num_classes'))
+
+        # dataset
+        logging.info('Initial dataset manager')
+        self.cfg_data = cfg_data
+        self.dataset_manager = DatasetManager(cfg_data.get('dataset_name', ''), cfg_data.get('dataset_path', ''))
+
+    def train_dataloader(self) -> TRAIN_DATALOADERS:
+        # reading method for train
+        logging.info('Initial train loader')
+        m_reading_train_cfg = self.cfg_data.get('reading_method_train')
+        m_reading_train = initial_m_reading(m_reading_train_cfg.get('name'), **m_reading_train_cfg)
+        batch_size_train = self.cfg_data.get('batch_size_train', 16)
+        num_instance = self.cfg_data.get('num_instance', 4)
+        data_sampler = RandomIdentitySampler(self.dataset_manager.get_dataset_list('train'),
+                                             batch_size_train,
+                                             num_instance)
+        loader_train = DataLoader(
+            self.dataset_manager.get_dataset_image('train', m_reading_train),
+            batch_size=batch_size_train,
+            num_workers=self.cfg_data.get('num_workers', 8),
+            sampler=data_sampler
+        )
+        return loader_train
+
+    def val_dataloader(self) -> EVAL_DATALOADERS:
+        logging.info('Initial gallery loader')
+        m_reading_test_cfg = self.cfg_data.get('reading_method_test')
+        m_reading_test = initial_m_reading(m_reading_test_cfg.get('name'), **m_reading_test_cfg)
+        loader_gallery = DataLoader(
+            self.dataset_manager.get_dataset_image('test', m_reading_test),
+            batch_size=self.cfg_data.get('batch_size_test', 16),
+            num_workers=self.cfg_data.get('num_workers', 8),
+            drop_last=False,
+            shuffle=False
+        )
+        logging.info('Initial query loader')
+        loader_query = DataLoader(
+            self.dataset_manager.get_dataset_image('query', m_reading_test),
+            batch_size=self.cfg_data.get('batch_size_test', 16),
+            num_workers=self.cfg_data.get('num_workers', 8),
+            drop_last=False,
+            shuffle=False
+        )
+        return [loader_gallery, loader_query]
+    def test_dataloader(self) -> EVAL_DATALOADERS:
+        return self.val_dataloader()
 
     def configure_optimizers(self):
         optimizer, _ = solver.make_optimizer(cfg_solver=self.cfg_solver, model=self.net)
@@ -68,7 +122,7 @@ class ModelManager(L.LightningModule):
         input_data = dict()
         for l in self.data_input_l.keys():
             if not l in batch.keys():
-                logger.error(f'The expected input {l} for network is accessible.')
+                logging.error(f'The expected input {l} for network is accessible.')
                 raise
             else:
                 input_data[self.data_input_l[l]] = batch[l]
@@ -81,15 +135,18 @@ class ModelManager(L.LightningModule):
         loss_dict = self.loss_f(batch)
         # calculate acc
         self.metric_train(output_data['pred'], batch['pid'])
-        self.log(f"=Acc(Train)", self.metric_train,
-                 on_step=False, on_epoch=True, prog_bar=True, logger=True)
         for key, item in loss_dict.items():
-            self.log(f"{key}(Train)", item.item(),
+            self.log(f"train/{key}", item.item(),
                      on_step=True, on_epoch=True, prog_bar=(key == 'loss'), logger=True)
-        return loss_dict
+        return loss_dict['loss']
+
+    def on_train_epoch_end(self) -> None:
+        self.log(f"train/acc", self.metric_train, on_step=False, on_epoch=True, prog_bar=True, logger=True)
+        logging.info(f'[Train|E{self.current_epoch:0>4d}] Acc:{self.metric_train.compute():>4.2%}')
+        self.metric_train.reset()
 
     def on_validation_epoch_start(self) -> None:
-        logger.info('Begin to Validation')
+        logging.info('Begin to Validation')
         self.feat_gallery_l = []
         self.pid_gallery_l = []
         self.cid_gallery_l = []
@@ -121,36 +178,36 @@ class ModelManager(L.LightningModule):
         cid_gallery = torch.cat(self.cid_gallery_l).numpy()
         cid_query = torch.cat(self.cid_query_l).numpy()
 
-        logger.info("compute dist mat")
-        distmat = compute_dis_matrix(feat_query, feat_gallery, self.metrics, is_re_ranking=False)
-        logger.info("compute rank list and score")
-        cmc, m_ap, m_inp, _ = eval_func(distmat, pid_query, pid_gallery, cid_query, cid_gallery)
-        logger.info(
+        logging.info("compute dist mat")
+        dist_mat = compute_dis_matrix(feat_query, feat_gallery, self.metrics, is_re_ranking=False)
+        logging.info("compute rank list and score")
+        cmc, m_ap, m_inp, _ = eval_func(dist_mat, pid_query, pid_gallery, cid_query, cid_gallery)
+        logging.info(
             f'{"Result(w/o RK):":<15} {"Rank-1:":<8} {cmc[0]:>7.2%} {"Rank-3:":<8} {cmc[2]:>7.2%} {"Rank-5:":<8} {cmc[4]:>7.2%} {"Rank-10:":<8} {cmc[9]:>7.2%}')
-        logger.info(f'{" ":<15} {"mAP:":<8} {m_ap:>7.2%} {"mINP:":<8} {m_inp:>7.2%}')
+        logging.info(f'{" ":<15} {"mAP:":<8} {m_ap:>7.2%} {"mINP:":<8} {m_inp:>7.2%}')
         self.log_dict({
-            'R@1': cmc[0],
-            'R@3': cmc[2],
-            'R@5': cmc[4],
-            'R@10': cmc[9],
-            'mAP': m_ap,
-            'mINP': m_inp
+            'val/R1': cmc[0],
+            'val/R3': cmc[2],
+            'val/R5': cmc[4],
+            'val/R10': cmc[9],
+            'val/mAP': m_ap,
+            'val/mINP': m_inp
         }, on_epoch=True)
         if self.re_ranking:
-            logger.info("compute dist mat (with RK)")
-            distmat = compute_dis_matrix(feat_query, feat_gallery, self.metrics, is_re_ranking=True)
-            logger.info("compute rank list and score")
-            cmc, m_ap, m_inp, _ = eval_func(distmat, pid_query, pid_gallery, cid_query, cid_gallery)
-            logger.info(
+            logging.info("compute dist mat (with RK)")
+            dist_mat = compute_dis_matrix(feat_query, feat_gallery, self.metrics, is_re_ranking=True)
+            logging.info("compute rank list and score")
+            cmc, m_ap, m_inp, _ = eval_func(dist_mat, pid_query, pid_gallery, cid_query, cid_gallery)
+            logging.info(
                 f'{"Result(with RK):":<15} {"Rank-1:":<8} {cmc[0]:>7.2%} {"Rank-3:":<8} {cmc[2]:>7.2%} {"Rank-5:":<8} {cmc[4]:>7.2%} {"Rank-10:":<8} {cmc[9]:>7.2%}')
-            logger.info(f'{" ":<15} {"mAP:":<8} {m_ap:>7.2%} {"mINP:":<8} {m_inp:>7.2%}')
+            logging.info(f'{" ":<15} {"mAP:":<8} {m_ap:>7.2%} {"mINP:":<8} {m_inp:>7.2%}')
             self.log_dict({
-                'R@1(RK)': cmc[0],
-                'R@3(RK)': cmc[2],
-                'R@5(RK)': cmc[4],
-                'R@10(RK)': cmc[9],
-                'mAP(RK)': m_ap,
-                'mINP(RK)': m_inp
+                'val/R1(RK)': cmc[0],
+                'val/R3(RK)': cmc[2],
+                'val/R5(RK)': cmc[4],
+                'val/R10(RK)': cmc[9],
+                'val/mAP(RK)': m_ap,
+                'val/mINP(RK)': m_inp
             }, on_epoch=True)
 
         self.feat_gallery_l.clear()

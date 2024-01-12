@@ -1,5 +1,6 @@
 import torch
-import logging
+from utils.logger import Logger
+logging = Logger()
 import re
 
 def make_optimizer(cfg_solver:dict, model, center_criterion= None):
@@ -37,7 +38,6 @@ def make_optimizer(cfg_solver:dict, model, center_criterion= None):
         # default value
         if not flag_finish:
             params += [{"params": [value], "lr": lr_base, "weight_decay": weight_decay_base}]
-        logging.debug(f"tra")
     if optimizer == 'SGD':
         optimizer = getattr(torch.optim, optimizer)(params, momentum=cfg_solver.get('momentum', 0.9))
     elif optimizer == 'AdamW':

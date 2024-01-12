@@ -1,7 +1,7 @@
 import os.path as osp
 import os
-from utils.logger import logger as logging
-
+from utils.logger import Logger
+logging = Logger()
 
 class MSMT17(object):
     def __init__(self, dataset_dir):

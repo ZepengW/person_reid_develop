@@ -6,7 +6,9 @@ from dataset.dataset_mars import Mars
 from dataset.dataset_occludedreid import OccludedReID
 from dataset.dataset_partialreid import  PartialReID
 import dataset.method_reading as m
-from utils.logger import logger as logging
+from utils.logger import Logger
+logging = Logger()
+
 
 DATASET_MAP = {
     'market': Market,

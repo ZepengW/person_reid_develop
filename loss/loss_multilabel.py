@@ -1,7 +1,8 @@
 # provide loss function for two label merge
 import torch.nn as nn
 import torch
-import logging
+from utils.logger import Logger
+logging = Logger()
 from .triplet_loss import TripletLoss, SoftLabelTriplet
 
 class XentMultiInput(object):

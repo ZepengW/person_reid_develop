@@ -1,4 +1,5 @@
-from utils.logger import logger as logging
+from utils.logger import Logger
+logging = Logger()
 from .triplet_loss import TripletLoss, WeightedRegularizedTriplet, CrossEntropyLabelSmooth, SoftTriple
 from .loss_multilabel import XentMultiLabel, XentMultiInput, TripletMultiInput, TripletMultiLabel, SoftlabelTripletMultiInput, XentMultiInputSoftLabel
 import torch
