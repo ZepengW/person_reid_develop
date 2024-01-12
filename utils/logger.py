@@ -18,7 +18,7 @@ class Logger:
     def set_log_file(self, log_file_path):
         if self.file_handler:
             self.logger.removeHandler(self.file_handler)
-
+        os.makedirs(os.path.dirname(log_file_path), exist_ok=True)
         self.file_handler = logging.FileHandler(log_file_path)
         self.file_handler.setFormatter(logging.Formatter('%(asctime)s - %(message)s', "%Y-%m-%d %H:%M"))
         self.logger.addHandler(self.file_handler)
@@ -27,10 +27,10 @@ class Logger:
         self._log(message, logging.INFO)
 
     def error(self, message):
-        self._log(message, logging.ERROR, '\033[91m')  # Red color for errors
+        self._log(message, logging.ERROR)  # Red color for errors
 
     def warning(self, message):
-        self._log(message, logging.WARNING, '\033[93m')  # Yellow color for warnings
+        self._log(message, logging.WARNING)  # Yellow color for warnings
 
     def _log(self, message, level, color='\033[0m'):
         # Get the file path of the caller
@@ -39,7 +39,7 @@ class Logger:
         filepath = os.path.relpath(module.__file__)
 
         # Clear the current line and print the message
-        message = f'{color}{filepath}: {message}\033[0m'
+        message = f'{filepath}: {message}'
         if level == logging.INFO:
             self.logger.info(message)
         elif level == logging.ERROR:
@@ -49,3 +49,6 @@ class Logger:
 
 # Create a global logger instance
 logger = Logger()
+
+# Disable the handlers of the root logger
+logging.getLogger().handlers = []
