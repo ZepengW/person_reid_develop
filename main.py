@@ -16,14 +16,14 @@ import yaml
 
 
 def set_seed(seed):
-    seed_everything(seed)
+    seed_everything(seed, workers=True)
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = True
 
 
 def main(cfg_dict: dict, logger_comet: CometLogger):
     set_seed(cfg_dict.get('seed', 1234))
-    model_config = cfg_dict.get('model-manager', dict())
+    cfg_model = cfg_dict.get('model-manager', dict())
 
     # callback
     exp_name = cfg_dict['logger']['task_name']
@@ -32,7 +32,8 @@ def main(cfg_dict: dict, logger_comet: CometLogger):
     checkpoint_callback = ModelCheckpoint(
         monitor='val/mAP',
         dirpath=dir_weights,
-        filename='E{epoch}-mAP={val/mAP:.2%}'
+        filename='E{epoch}-mAP={mAP:.2%}',
+        save_last=True
     )
     # Trainer for Lightning
     job = Lp.Trainer(
@@ -40,21 +41,17 @@ def main(cfg_dict: dict, logger_comet: CometLogger):
         accelerator='cpu' if cfg_dict.get('gpus', 'auto') == -1 else 'gpu',
         devices=cfg_dict.get('gpus', 'auto'),
         precision=cfg_dict.get('precision', 32),
-        min_epochs=model_config.get('epoch', 100),
-        max_epochs=model_config.get('epoch', 100),
-        check_val_every_n_epoch=cfg_dict.get('eval_interval', 10),
-        enable_checkpointing=True,
+        min_epochs=cfg_model.get('epoch', 100),
+        max_epochs=cfg_model.get('epoch', 100),
         logger=logger_comet,
-        default_root_dir=os.path.join('output', exp_name),
-        log_every_n_steps=20
+        log_every_n_steps=20,
+        check_val_every_n_epoch=cfg_dict.get('eval_interval', 10)
     )
     # initial dataset
-    dataset_config = cfg_dict.get('dataset', dict())
-    dataset_manager = DatasetManager(dataset_config.get('dataset_name', ''), dataset_config.get('dataset_path', ''))
-    get_dataset = dataset_manager.get_dataset_image  # support image reading for now
+    cfg_data = cfg_dict.get('dataset', dict())
     # initial model
     mode = cfg_dict.get('mode', 'train')
-    model = ModelManager(model_config, dataset_config)
+    model = ModelManager(cfg_model, cfg_data)
     if 'train' == mode:
         logging.info('Begin to train')
         job.fit(model)

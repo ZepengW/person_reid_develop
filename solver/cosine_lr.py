@@ -57,6 +57,7 @@ class CosineLRScheduler(Scheduler):
             super().update_groups(self.warmup_lr_init)
         else:
             self.warmup_steps = [1 for _ in self.base_values]
+        self.step(1)
 
 
 

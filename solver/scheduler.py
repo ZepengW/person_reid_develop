@@ -65,7 +65,6 @@ class Scheduler(torch.optim.lr_scheduler.LRScheduler):
 
     def step(self, epoch: int = None, metric: float = None) -> None:
         self.metric = metric
-        self.last_epoch += 1
         if epoch is None:
             self.last_epoch += 1
             values = self.get_epoch_values(self.last_epoch)

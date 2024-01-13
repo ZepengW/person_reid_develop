@@ -19,6 +19,7 @@ from torch.utils.data import DataLoader
 class ModelManager(L.LightningModule):
     def __init__(self, cfg_model: dict, cfg_data: dict=None):
         super().__init__()
+        self.cfg_model = cfg_model
         # add your own network here
         network_params = cfg_model.get('network-params', dict())
         self.net = make_model(cfg_model.get('network_name'), network_params)
@@ -56,9 +57,10 @@ class ModelManager(L.LightningModule):
                                              num_instance)
         loader_train = DataLoader(
             self.dataset_manager.get_dataset_image('train', m_reading_train),
-            batch_size=batch_size_train,
             num_workers=self.cfg_data.get('num_workers', 8),
-            sampler=data_sampler
+            batch_size=batch_size_train,
+            sampler=data_sampler,
+            drop_last=True
         )
         return loader_train
 
@@ -90,28 +92,11 @@ class ModelManager(L.LightningModule):
         # scheduler for lr
         lr_scheduler = solver.create_scheduler(self.cfg_solver, optimizer)
         if lr_scheduler is None:
+            logging.warning('No lr scheduler')
             return optimizer
         lr_scheduler_config = {
-            # REQUIRED: The scheduler instance
             "scheduler": lr_scheduler,
-            # The unit of the scheduler's step size, could also be 'step'.
-            # 'epoch' updates the scheduler on epoch end whereas 'step'
-            # updates it after a optimizer update.
             "interval": "epoch",
-            # How many epochs/steps should pass between calls to
-            # `scheduler.step()`. 1 corresponds to updating the learning
-            # rate after every epoch/step.
-            "frequency": 1,
-            # Metric to monitor for schedulers like `ReduceLROnPlateau`
-            # "monitor": "val_loss",
-            # If set to `True`, will enforce that the value specified 'monitor'
-            # is available when the scheduler is updated, thus stopping
-            # training if not found. If set to `False`, it will only produce a warning
-            # "strict": True,
-            # If using the `LearningRateMonitor` callback to monitor the
-            # learning rate progress, this keyword can be used to specify
-            # a custom logged name
-            "name": None,
         }
         return {
             'optimizer': optimizer,
@@ -128,6 +113,17 @@ class ModelManager(L.LightningModule):
                 input_data[self.data_input_l[l]] = batch[l]
         return input_data
 
+    def on_train_epoch_start(self):
+        # logging lr
+        logging.info(f"Epoch[{self.current_epoch:0>3d}] Begin to train")
+        for i, optimizer in enumerate(self.trainer.optimizers):
+            for j, param_group in enumerate(optimizer.param_groups):
+                current_lr = param_group['lr']
+                group_name = param_group['group_name']
+                logging.info(f"Lr group:{group_name} | lr:{current_lr:.2e}")
+                if group_name == 'default':
+                    self.log('lr', current_lr)
+
     def training_step(self, batch, batch_idx):
         input_data = self.refactor_inputs(batch)
         output_data = self.net(**input_data)
@@ -141,12 +137,16 @@ class ModelManager(L.LightningModule):
                      on_step=True, on_epoch=True, prog_bar=(key == 'loss'), logger=True)
         return loss_dict['loss']
 
-    # def on_train_epoch_end(self) -> None:
-    #     logging.info(f'[Train|E{self.current_epoch:0>4d}]')
-    #     self.metric_train.reset()
+    def on_train_epoch_end(self) -> None:
+        metrics = self.trainer.callback_metrics
+        log_train = f'acc:{metrics["train/acc"]} loss:{metrics["train/loss"]}'
+        for loss in self.cfg_model['loss']:
+            log_train += f' {loss["name"]}:{metrics["train/"+loss["name"]+"_epoch"]}'
+        logging.info('[Train/Metrics] ' + log_train)
+        logging.info(' '.join([f'{name}:{metrics[name]:.4f}' for name in metrics.keys()]))
 
     def on_validation_epoch_start(self) -> None:
-        logging.info('Begin to Validation')
+        logging.info(f'Begin to validation')
         self.feat_gallery_l = []
         self.pid_gallery_l = []
         self.cid_gallery_l = []
@@ -178,12 +178,12 @@ class ModelManager(L.LightningModule):
         cid_gallery = torch.cat(self.cid_gallery_l).numpy()
         cid_query = torch.cat(self.cid_query_l).numpy()
 
-        logging.info("compute dist mat")
+        print("compute dist mat")
         dist_mat = compute_dis_matrix(feat_query, feat_gallery, self.metrics, is_re_ranking=False)
-        logging.info("compute rank list and score")
+        print("compute rank list and score")
         cmc, m_ap, m_inp, _ = eval_func(dist_mat, pid_query, pid_gallery, cid_query, cid_gallery)
         logging.info(
-            f'{"Result(w/o RK):":<15} {"Rank-1:":<8} {cmc[0]:>7.2%} {"Rank-3:":<8} {cmc[2]:>7.2%} {"Rank-5:":<8} {cmc[4]:>7.2%} {"Rank-10:":<8} {cmc[9]:>7.2%}')
+            f'{"Eval(w/o RK):":<15} {"Rank-1:":<8} {cmc[0]:>7.2%} {"Rank-3:":<8} {cmc[2]:>7.2%} {"Rank-5:":<8} {cmc[4]:>7.2%} {"Rank-10:":<8} {cmc[9]:>7.2%}')
         logging.info(f'{" ":<15} {"mAP:":<8} {m_ap:>7.2%} {"mINP:":<8} {m_inp:>7.2%}')
         self.log_dict({
             'val/R1': cmc[0],
@@ -194,12 +194,12 @@ class ModelManager(L.LightningModule):
             'val/mINP': m_inp
         }, on_epoch=True)
         if self.re_ranking:
-            logging.info("compute dist mat (with RK)")
+            print("compute dist mat (with RK)")
             dist_mat = compute_dis_matrix(feat_query, feat_gallery, self.metrics, is_re_ranking=True)
-            logging.info("compute rank list and score")
+            print("compute rank list and score")
             cmc, m_ap, m_inp, _ = eval_func(dist_mat, pid_query, pid_gallery, cid_query, cid_gallery)
             logging.info(
-                f'{"Result(with RK):":<15} {"Rank-1:":<8} {cmc[0]:>7.2%} {"Rank-3:":<8} {cmc[2]:>7.2%} {"Rank-5:":<8} {cmc[4]:>7.2%} {"Rank-10:":<8} {cmc[9]:>7.2%}')
+                f'{"Eval(with RK):":<15} {"Rank-1:":<8} {cmc[0]:>7.2%} {"Rank-3:":<8} {cmc[2]:>7.2%} {"Rank-5:":<8} {cmc[4]:>7.2%} {"Rank-10:":<8} {cmc[9]:>7.2%}')
             logging.info(f'{" ":<15} {"mAP:":<8} {m_ap:>7.2%} {"mINP:":<8} {m_inp:>7.2%}')
             self.log_dict({
                 'val/R1(RK)': cmc[0],

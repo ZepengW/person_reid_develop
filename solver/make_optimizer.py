@@ -2,6 +2,7 @@ import torch
 from utils.logger import Logger
 logging = Logger()
 import re
+from collections import defaultdict
 
 def make_optimizer(cfg_solver:dict, model, center_criterion= None):
     """
@@ -17,29 +18,20 @@ def make_optimizer(cfg_solver:dict, model, center_criterion= None):
     logging.info(f'=> Initial Optimizer:{optimizer}')
     logging.info(f'----base base_lr:{lr_base}')
     logging.info(f'----base weight_decay:{weight_decay_base}')
+    cfg_params = cfg_solver.get('params_group', dict())
     spec_layer = cfg_solver.get('spec_layer', [])
     #format [{'re':'layer_name regex', 'lr':'lr', 'weight_decay':'weight_decay'}]
     # if lr is 0, demonstrate the layers matched is frozen
-    params = []
+    params_groups = defaultdict(list)
+    params_groups['default'] = {"params": [], "group_name": "default"}
     for key, value in model.named_parameters():
         if not value.requires_grad:
             continue
-        flag_finish = False
-        for spec in spec_layer:
-            if re.search(spec['re'],key):
-                lr = spec.get('lr', 0)
-                weight_decay = spec.get('weight_decay', weight_decay_base)
-                if not lr == 0:
-                    params += [{"params": [value], "lr": lr, "weight_decay": weight_decay}]
-                else:
-                    value.requires_grad = True
-                flag_finish = True
-                break
-        # default value
-        if not flag_finish:
-            params += [{"params": [value], "lr": lr_base, "weight_decay": weight_decay_base}]
+        params_groups['default']['params'].append(value)
+    params = list(params_groups.values())
     if optimizer == 'SGD':
-        optimizer = getattr(torch.optim, optimizer)(params, momentum=cfg_solver.get('momentum', 0.9))
+        optimizer = getattr(torch.optim, optimizer)(params, momentum=cfg_solver.get('momentum', 0.9), lr=lr_base,
+                                      weight_decay=weight_decay_base)
     elif optimizer == 'AdamW':
         optimizer = torch.optim.AdamW(params, lr=lr_base,
                                       weight_decay=weight_decay_base)

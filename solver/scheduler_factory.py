@@ -20,7 +20,7 @@ def create_scheduler(cfg_solver, optimizer):
         # lr_min = 0.001 * cfg.SOLVER.BASE_LR
         # warmup_lr_init = 0.01 * cfg.SOLVER.BASE_LR
 
-        warmup_t = cfg_solver.get('warmup_epochs', 0.0003)
+        warmup_t = cfg_solver.get('warmup_epochs', 5)
         noise_range = None
         input_params = {
             "t_initial": num_epochs,
