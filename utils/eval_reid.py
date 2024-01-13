@@ -7,67 +7,43 @@ import random
 import torch
 import os
 
-def eval_func(distmat, q_pids, g_pids, q_camids, g_camids, max_rank=50, q_img_paths=None, g_img_paths=None):
-    """
-    Evaluation with market1501 metric
-    Key: for each query identity, its gallery images from the same camera view are discarded.
-    output the detail result: img path
-    """
+def eval_func(distmat, q_pids, g_pids, q_camids, g_camids, max_rank=50):
+    """Evaluation with market1501 metric
+        Key: for each query identity, its gallery images from the same camera view are discarded.
+        """
     num_q, num_g = distmat.shape
+    # distmat g
+    #    q    1 3 2 4
+    #         4 1 2 3
     if num_g < max_rank:
         max_rank = num_g
         print("Note: number of gallery samples is quite small, got {}".format(num_g))
     indices = np.argsort(distmat, axis=1)
+    #  0 2 1 3
+    #  1 2 3 0
     matches = (g_pids[indices] == q_pids[:, np.newaxis]).astype(np.int32)
-
     # compute cmc curve for each query
     all_cmc = []
     all_AP = []
-    all_INP = []
     num_valid_q = 0.  # number of valid query
-    # vis result
-    res_vis = []  # data format: ((query_img_path, gallery_img_path_1, gallery_img_path_2, ...), res_label_list)
-    if q_img_paths is not None and g_img_paths is not None:
-        q_img_paths = np.array(q_img_paths)
-        g_img_paths = np.array(g_img_paths)
     for q_idx in range(num_q):
         # get query pid and camid
         q_pid = q_pids[q_idx]
         q_camid = q_camids[q_idx]
+
         # remove gallery samples that have the same pid and camid with query
-        order = indices[q_idx]
-        if (q_camid == -1).all():
-            remove = (g_pids[order] == q_pid)
-            remove[:] = False
-        else:
-            # remove gallery samples that have the same pid and camid with query
-            remove = (g_pids[order] == q_pid) & (g_camids[order] == q_camid)
+        order = indices[q_idx]  # select one row
+        remove = (g_pids[order] == q_pid) & (g_camids[order] == q_camid)
         keep = np.invert(remove)
-        # new add for not delete sample with same pid and cid
-        # list = [True] * np.shape(order)[0]
-        # keep = np.array(list)
 
         # compute cmc curve
-        # binary vector, positions with value 1 are correct matchesN
+        # binary vector, positions with value 1 are correct matches
         orig_cmc = matches[q_idx][keep]
         if not np.any(orig_cmc):
             # this condition is true when query identity does not appear in gallery
             continue
-        # record imgs' path of result
-        if q_img_paths is not None and g_img_paths is not None:
-            # first element is query image path, others are ranked gallery image path
-            r = np.concatenate([q_img_paths[q_idx:q_idx+1], g_img_paths[order][keep]])
-            pids = []
-            pids.append(q_pid)
-            pids += g_pids[order][keep].tolist()
-            res_vis.append((r, orig_cmc, pids))
 
         cmc = orig_cmc.cumsum()
-        pos_idx = np.where(orig_cmc == 1)
-        max_pos_idx = np.max(pos_idx)
-        inp = cmc[max_pos_idx] / (max_pos_idx + 1.0)
-        all_INP.append(inp)
-
         cmc[cmc > 1] = 1
 
         all_cmc.append(cmc[:max_rank])
@@ -77,6 +53,7 @@ def eval_func(distmat, q_pids, g_pids, q_camids, g_camids, max_rank=50, q_img_pa
         # reference: https://en.wikipedia.org/wiki/Evaluation_measures_(information_retrieval)#Average_precision
         num_rel = orig_cmc.sum()
         tmp_cmc = orig_cmc.cumsum()
+        #tmp_cmc = [x / (i + 1.) for i, x in enumerate(tmp_cmc)]
         y = np.arange(1, tmp_cmc.shape[0] + 1) * 1.0
         tmp_cmc = tmp_cmc / y
         tmp_cmc = np.asarray(tmp_cmc) * orig_cmc
@@ -88,9 +65,8 @@ def eval_func(distmat, q_pids, g_pids, q_camids, g_camids, max_rank=50, q_img_pa
     all_cmc = np.asarray(all_cmc).astype(np.float32)
     all_cmc = all_cmc.sum(0) / num_valid_q
     mAP = np.mean(all_AP)
-    mINP = np.mean(all_INP)
 
-    return all_cmc, mAP, mINP, res_vis
+    return all_cmc, mAP
 
 
 def visualize_result(res_vis, max_rank=10, size=(50, 100), sample_method='random', sample_num = 20, writer=None):

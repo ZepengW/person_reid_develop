@@ -32,8 +32,9 @@ def main(cfg_dict: dict, logger_comet: CometLogger):
     checkpoint_callback = ModelCheckpoint(
         monitor='val/mAP',
         dirpath=dir_weights,
-        filename='E{epoch}-mAP={mAP:.2%}',
-        save_last=True
+        filename='E{epoch}-mAP{val/mAP:.2%}',
+        save_last=True,
+        auto_insert_metric_name=False
     )
     # Trainer for Lightning
     job = Lp.Trainer(
@@ -44,8 +45,8 @@ def main(cfg_dict: dict, logger_comet: CometLogger):
         min_epochs=cfg_model.get('epoch', 100),
         max_epochs=cfg_model.get('epoch', 100),
         logger=logger_comet,
-        log_every_n_steps=20,
-        check_val_every_n_epoch=cfg_dict.get('eval_interval', 10)
+        check_val_every_n_epoch=cfg_dict.get('eval_interval', 10),
+        num_sanity_val_steps=-1
     )
     # initial dataset
     cfg_data = cfg_dict.get('dataset', dict())

@@ -1,5 +1,6 @@
 from typing import Optional, Union, Callable, Any
 
+import numpy as np
 import torch
 from lightning.pytorch.utilities.types import _METRIC, EVAL_DATALOADERS, TRAIN_DATALOADERS, STEP_OUTPUT
 
@@ -15,6 +16,7 @@ from torchmetrics import Accuracy
 from dataset import DatasetManager, initial_m_reading
 from dataset.sampler import RandomIdentitySampler
 from torch.utils.data import DataLoader
+import sys
 
 class ModelManager(L.LightningModule):
     def __init__(self, cfg_model: dict, cfg_data: dict=None):
@@ -139,11 +141,10 @@ class ModelManager(L.LightningModule):
 
     def on_train_epoch_end(self) -> None:
         metrics = self.trainer.callback_metrics
-        log_train = f'acc:{metrics["train/acc"]} loss:{metrics["train/loss"]}'
+        log_train = f'acc:{metrics["train/acc"]:.2%} loss:{metrics["train/loss"]:.4f}'
         for loss in self.cfg_model['loss']:
-            log_train += f' {loss["name"]}:{metrics["train/"+loss["name"]+"_epoch"]}'
+            log_train += f' {loss["name"]}:{metrics["train/"+loss["name"]+"_epoch"]:.4f}'
         logging.info('[Train/Metrics] ' + log_train)
-        logging.info(' '.join([f'{name}:{metrics[name]:.4f}' for name in metrics.keys()]))
 
     def on_validation_epoch_start(self) -> None:
         logging.info(f'Begin to validation')
@@ -161,54 +162,61 @@ class ModelManager(L.LightningModule):
         input_data = self.refactor_inputs(batch)
         output_data = self.net(**input_data)
         if dataloader_idx == 0:
-            self.feat_gallery_l.append(output_data['feat'].cpu())
-            self.pid_gallery_l.append(batch['pid'].cpu())
-            self.cid_gallery_l.append(batch['camera_id'].cpu())
+            self.feat_gallery_l.append(output_data['feat'].cpu().clone().detach())
+            self.pid_gallery_l.append(batch['pid'].cpu().clone().detach().numpy())
+            self.cid_gallery_l.append(batch['camera_id'].cpu().clone().detach().numpy())
         elif dataloader_idx == 1:
-            self.feat_query_l.append(output_data['feat'].cpu())
-            self.pid_query_l.append(batch['pid'].cpu())
-            self.cid_query_l.append(batch['camera_id'].cpu())
+            self.feat_query_l.append(output_data['feat'].cpu().clone().detach())
+            self.pid_query_l.append(batch['pid'].cpu().clone().detach().numpy())
+            self.cid_query_l.append(batch['camera_id'].cpu().clone().detach().numpy())
+
 
     def on_validation_epoch_end(self) -> None:
         # calculate top-1 and mAP
         feat_gallery = torch.cat(self.feat_gallery_l)
         feat_query = torch.cat(self.feat_query_l)
-        pid_gallery = torch.cat(self.pid_gallery_l).numpy()
-        pid_query = torch.cat(self.pid_query_l).numpy()
-        cid_gallery = torch.cat(self.cid_gallery_l).numpy()
-        cid_query = torch.cat(self.cid_query_l).numpy()
+        pid_gallery = np.concatenate(self.pid_gallery_l)
+        pid_query = np.concatenate(self.pid_query_l)
+        cid_gallery = np.concatenate(self.cid_gallery_l)
+        cid_query = np.concatenate(self.cid_query_l)
+
 
         print("compute dist mat")
         dist_mat = compute_dis_matrix(feat_query, feat_gallery, self.metrics, is_re_ranking=False)
         print("compute rank list and score")
-        cmc, m_ap, m_inp, _ = eval_func(dist_mat, pid_query, pid_gallery, cid_query, cid_gallery)
+        cmc, m_ap = eval_func(dist_mat, pid_query, pid_gallery, cid_query, cid_gallery)
         logging.info(
             f'{"Eval(w/o RK):":<15} {"Rank-1:":<8} {cmc[0]:>7.2%} {"Rank-3:":<8} {cmc[2]:>7.2%} {"Rank-5:":<8} {cmc[4]:>7.2%} {"Rank-10:":<8} {cmc[9]:>7.2%}')
-        logging.info(f'{" ":<15} {"mAP:":<8} {m_ap:>7.2%} {"mINP:":<8} {m_inp:>7.2%}')
+        logging.info(f'{" ":<15} {"mAP:":<8} {m_ap:>7.2%}')
         self.log_dict({
             'val/R1': cmc[0],
             'val/R3': cmc[2],
             'val/R5': cmc[4],
             'val/R10': cmc[9],
-            'val/mAP': m_ap,
-            'val/mINP': m_inp
+            'val/mAP': m_ap
         }, on_epoch=True)
         if self.re_ranking:
             print("compute dist mat (with RK)")
             dist_mat = compute_dis_matrix(feat_query, feat_gallery, self.metrics, is_re_ranking=True)
-            print("compute rank list and score")
-            cmc, m_ap, m_inp, _ = eval_func(dist_mat, pid_query, pid_gallery, cid_query, cid_gallery)
+            print("compute rank list and score  (with RK)")
+            cmc, m_ap = eval_func(dist_mat, pid_query, pid_gallery, cid_query, cid_gallery)
             logging.info(
                 f'{"Eval(with RK):":<15} {"Rank-1:":<8} {cmc[0]:>7.2%} {"Rank-3:":<8} {cmc[2]:>7.2%} {"Rank-5:":<8} {cmc[4]:>7.2%} {"Rank-10:":<8} {cmc[9]:>7.2%}')
-            logging.info(f'{" ":<15} {"mAP:":<8} {m_ap:>7.2%} {"mINP:":<8} {m_inp:>7.2%}')
+            logging.info(f'{" ":<15} {"mAP:":<8} {m_ap:>7.2%}')
             self.log_dict({
                 'val/R1(RK)': cmc[0],
                 'val/R3(RK)': cmc[2],
                 'val/R5(RK)': cmc[4],
                 'val/R10(RK)': cmc[9],
-                'val/mAP(RK)': m_ap,
-                'val/mINP(RK)': m_inp
+                'val/mAP(RK)': m_ap
             }, on_epoch=True)
+        del dist_mat
+        del feat_query
+        del feat_gallery
+        del pid_gallery
+        del pid_query
+        del cid_query
+        del cid_gallery
 
         self.feat_gallery_l.clear()
         self.pid_gallery_l.clear()
@@ -222,7 +230,7 @@ class ModelManager(L.LightningModule):
 
     def test_step(self, batch, batch_idx, dataloader_idx=0):
         # Call the validation_step method for testing
-        self.validation_step(batch, batch_idx, dataloader_idx)
+        return self.validation_step(batch, batch_idx, dataloader_idx)
 
     def on_test_epoch_end(self):
         # Call the on_validation_epoch_end method for testing
