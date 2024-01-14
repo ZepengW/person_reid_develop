@@ -11,3 +11,7 @@ output/
 
 #log file
 lightning_logs/
+/pretrained
+/utils/rank_cylib/rank_cy.c
+/utils/rank_cylib/rank_cy.cpython-311-x86_64-linux-gnu.so
+/utils/rank_cylib/roc_cy.cpython-311-x86_64-linux-gnu.so
