@@ -1,6 +1,11 @@
 gpu: [0]
 eval_interval: 10 # eval each [eval_interval]
 
+logger:
+  api_key: None
+  workspace: None
+  project_name: reid
+  task_name: MSMT17-ResNet50
 
 model-manager:
   network_name: resnet50 # the network model
