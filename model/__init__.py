@@ -3,9 +3,6 @@ from typing import Optional, Union, Callable, Any
 import numpy as np
 import torch
 from lightning.pytorch.utilities.types import _METRIC, EVAL_DATALOADERS, TRAIN_DATALOADERS, STEP_OUTPUT
-
-from utils.eval_reid import eval_func
-from utils.re_ranking import compute_dis_matrix
 from model.model_factory import make_model
 import solver
 from loss import LossManager
@@ -16,7 +13,7 @@ from torchmetrics import Accuracy
 from dataset import DatasetManager, initial_m_reading
 from dataset.sampler import RandomIdentitySampler
 from torch.utils.data import DataLoader
-import sys
+from utils.eval_reid import Evaluator
 
 class ModelManager(L.LightningModule):
     def __init__(self, cfg_model: dict, cfg_data: dict=None):
@@ -40,6 +37,10 @@ class ModelManager(L.LightningModule):
         # metric
         self.metrics = cfg_model.get('metric', 'euclidean')
         self.re_ranking = cfg_model.get('re_ranking', True)
+        self.evaluator = Evaluator(
+            self.metrics,
+
+        )
         self.metric_train = Accuracy(task='multiclass', num_classes=network_params.get('num_classes'))
 
         # dataset
@@ -180,43 +181,36 @@ class ModelManager(L.LightningModule):
         cid_gallery = np.concatenate(self.cid_gallery_l)
         cid_query = np.concatenate(self.cid_query_l)
 
-
-        print("compute dist mat")
-        dist_mat = compute_dis_matrix(feat_query, feat_gallery, self.metrics, is_re_ranking=False)
-        print("compute rank list and score")
-        cmc, m_ap = eval_func(dist_mat, pid_query, pid_gallery, cid_query, cid_gallery)
+        res = self.evaluator(feat_query, feat_gallery, pid_query, pid_gallery, cid_query, cid_gallery)
+        cmc = res[0]
+        m_ap = res[1]
+        m_inp = res[2]
         logging.info(
             f'{"Eval(w/o RK):":<15} {"Rank-1:":<8} {cmc[0]:>7.2%} {"Rank-3:":<8} {cmc[2]:>7.2%} {"Rank-5:":<8} {cmc[4]:>7.2%} {"Rank-10:":<8} {cmc[9]:>7.2%}')
-        logging.info(f'{" ":<15} {"mAP:":<8} {m_ap:>7.2%}')
+        logging.info(f'{" ":<15} {"mAP:":<8} {m_ap:>7.2%} {m_inp:>7.2%}')
         self.log_dict({
             'val/R1': cmc[0],
             'val/R3': cmc[2],
             'val/R5': cmc[4],
             'val/R10': cmc[9],
-            'val/mAP': m_ap
+            'val/mAP': m_ap,
+            'val/mINP': m_inp
         }, on_epoch=True)
         if self.re_ranking:
-            print("compute dist mat (with RK)")
-            dist_mat = compute_dis_matrix(feat_query, feat_gallery, self.metrics, is_re_ranking=True)
-            print("compute rank list and score  (with RK)")
-            cmc, m_ap = eval_func(dist_mat, pid_query, pid_gallery, cid_query, cid_gallery)
+            cmc = res[3]
+            m_ap = res[4]
+            m_inp = res[5]
             logging.info(
-                f'{"Eval(with RK):":<15} {"Rank-1:":<8} {cmc[0]:>7.2%} {"Rank-3:":<8} {cmc[2]:>7.2%} {"Rank-5:":<8} {cmc[4]:>7.2%} {"Rank-10:":<8} {cmc[9]:>7.2%}')
-            logging.info(f'{" ":<15} {"mAP:":<8} {m_ap:>7.2%}')
+                f'{"Eval(w/o RK):":<15} {"Rank-1:":<8} {cmc[0]:>7.2%} {"Rank-3:":<8} {cmc[2]:>7.2%} {"Rank-5:":<8} {cmc[4]:>7.2%} {"Rank-10:":<8} {cmc[9]:>7.2%}')
+            logging.info(f'{" ":<15} {"mAP:":<8} {m_ap:>7.2%} {m_inp:>7.2%}')
             self.log_dict({
-                'val/R1(RK)': cmc[0],
-                'val/R3(RK)': cmc[2],
-                'val/R5(RK)': cmc[4],
-                'val/R10(RK)': cmc[9],
-                'val/mAP(RK)': m_ap
+                'val/R1': cmc[0],
+                'val/R3': cmc[2],
+                'val/R5': cmc[4],
+                'val/R10': cmc[9],
+                'val/mAP': m_ap,
+                'val/mINP': m_inp
             }, on_epoch=True)
-        del dist_mat
-        del feat_query
-        del feat_gallery
-        del pid_gallery
-        del pid_query
-        del cid_query
-        del cid_gallery
 
         self.feat_gallery_l.clear()
         self.pid_gallery_l.clear()

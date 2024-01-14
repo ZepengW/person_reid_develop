@@ -1,152 +1,30 @@
 # encoding: utf-8
 
 import numpy as np
-import cv2
-import math
-import random
-import torch
-import os
+from .rank import evaluate_rank
+import torch.nn.functional as F
+from utils.dist_compute import build_dist
+from utils.re_ranking import re_ranking
 
-def eval_func(distmat, q_pids, g_pids, q_camids, g_camids, max_rank=50):
-    """Evaluation with market1501 metric
-        Key: for each query identity, its gallery images from the same camera view are discarded.
-        """
-    num_q, num_g = distmat.shape
-    # distmat g
-    #    q    1 3 2 4
-    #         4 1 2 3
-    if num_g < max_rank:
-        max_rank = num_g
-        print("Note: number of gallery samples is quite small, got {}".format(num_g))
-    indices = np.argsort(distmat, axis=1)
-    #  0 2 1 3
-    #  1 2 3 0
-    matches = (g_pids[indices] == q_pids[:, np.newaxis]).astype(np.int32)
-    # compute cmc curve for each query
-    all_cmc = []
-    all_AP = []
-    num_valid_q = 0.  # number of valid query
-    for q_idx in range(num_q):
-        # get query pid and camid
-        q_pid = q_pids[q_idx]
-        q_camid = q_camids[q_idx]
+class Evaluator(object):
+    def __init__(self, metric='euclidean', use_metric_cuhk03=False, k1=20, k2=6, lambda_value=0.2):
+        self.metric = metric
+        self.k1 = k1
+        self.k2 = k2
+        self.lambda_value = lambda_value
+        self.use_metric_cuhk03 = use_metric_cuhk03
 
-        # remove gallery samples that have the same pid and camid with query
-        order = indices[q_idx]  # select one row
-        remove = (g_pids[order] == q_pid) & (g_camids[order] == q_camid)
-        keep = np.invert(remove)
-
-        # compute cmc curve
-        # binary vector, positions with value 1 are correct matches
-        orig_cmc = matches[q_idx][keep]
-        if not np.any(orig_cmc):
-            # this condition is true when query identity does not appear in gallery
-            continue
-
-        cmc = orig_cmc.cumsum()
-        cmc[cmc > 1] = 1
-
-        all_cmc.append(cmc[:max_rank])
-        num_valid_q += 1.
-
-        # compute average precision
-        # reference: https://en.wikipedia.org/wiki/Evaluation_measures_(information_retrieval)#Average_precision
-        num_rel = orig_cmc.sum()
-        tmp_cmc = orig_cmc.cumsum()
-        #tmp_cmc = [x / (i + 1.) for i, x in enumerate(tmp_cmc)]
-        y = np.arange(1, tmp_cmc.shape[0] + 1) * 1.0
-        tmp_cmc = tmp_cmc / y
-        tmp_cmc = np.asarray(tmp_cmc) * orig_cmc
-        AP = tmp_cmc.sum() / num_rel
-        all_AP.append(AP)
-
-    assert num_valid_q > 0, "Error: all query identities do not appear in gallery"
-
-    all_cmc = np.asarray(all_cmc).astype(np.float32)
-    all_cmc = all_cmc.sum(0) / num_valid_q
-    mAP = np.mean(all_AP)
-
-    return all_cmc, mAP
-
-
-def visualize_result(res_vis, max_rank=10, size=(50, 100), sample_method='random', sample_num = 20, writer=None):
-    '''
-    visualize rank result generate by eval_func
-    :param res_vis:
-    :param max_rank:
-    :param size:
-    :param sample_method:   random/list_false
-    :param writer:
-    :return:
-    '''
-    if writer is None:
-        return
-    imgs = []
-    r1_flag_l = []
-    for (img_paths, labels, pids) in res_vis:
-        img_vis, r1_flag = conbine_imgs(img_paths,size,labels,pids, max_rank)
-        imgs.append(img_vis)
-        r1_flag_l.append(r1_flag)
-    if sample_method == 'random':
-        imgs_selected_vis = random.sample(imgs, sample_num)
-    elif sample_method == 'list_false':
-        imgs_selected_vis = [imgs[i] for i in range(len(r1_flag_l)) if r1_flag_l[i] == False]
-    elif sample_method == 'all':
-        imgs_selected_vis = imgs
-    else:
-        imgs_selected_vis = []
-    split_num = math.ceil(len(imgs_selected_vis) / 10)
-    for i in range(split_num):
-        imgs_vis = torch.cat(imgs_selected_vis[i*10:i*10 + 10], dim=1)
-        writer.add_image(sample_method, imgs_vis, i)
-
-
-
-def conbine_imgs(img_paths, size, labels, pids, max_rank = 10):
-    '''
-    combine query img and ranked gallery imgs to a total img
-    :param img_paths:
-    :param size:
-    :param labels:
-    :return:
-    '''
-    # read query img
-    q_img_path = img_paths[0]
-    q_img = cv2.imread(q_img_path)
-    q_img = cv2.resize(q_img, size)
-    # add query text label
-    text_bg = np.zeros([20, q_img.shape[1], q_img.shape[2]])
-    q_pid = pids[0]
-    text_bg = cv2.putText(text_bg, str(q_pid), (0, 15), cv2.FONT_HERSHEY_COMPLEX, 0.5, (255, 255, 255), 1)
-    q_img = np.concatenate([q_img, text_bg], 0)
-    img_res = []
-    img_res.append(q_img)
-    # append space
-    space = np.zeros([q_img.shape[0], int(q_img.shape[1] / 2), q_img.shape[2]], dtype='uint8')
-    space[:] = 255
-    img_res.append(space)
-    rank1_success_marks = False # this is used to mark the rank 1 result is True or False
-    for i, g_img_path in enumerate(img_paths[1:max_rank+1]):
-        g_img = cv2.imread(g_img_path)
-        g_img = cv2.resize(g_img, size)
-        if labels[i] == 1:
-            # true
-            g_img = cv2.rectangle(g_img,(0, 0),(size[0]-1,size[1]-1),(0, 255, 0),2)
-            flag = True
+    def __call__(self, feat_q, feat_g, q_pids, g_pids, q_camids, g_camids, max_rank=50, re_ranking=False):
+        print("retrival evaluate")
+        print("compute dist mat")
+        dist = build_dist(feat_q, feat_g, metric=self.metric)
+        print("calculate metric")
+        cmc, all_AP, all_INP = evaluate_rank(dist, q_pids, g_pids, q_camids, g_camids,
+                                             max_rank=max_rank, use_metric_cuhk03=self.use_metric_cuhk03)
+        mAP = np.mean(all_AP)
+        mINP = np.mean(all_INP)
+        if re_ranking:
+            print("Re-Ranking")
+            # todo: re-ranking
         else:
-            # wrong
-            g_img = cv2.rectangle(g_img, (0, 0), (size[0] - 1, size[1] - 1), (255, 0, 0), 2)
-            flag = False
-        # add text label
-        text_bg = np.zeros([20, g_img.shape[1], g_img.shape[2]], dtype='uint8')
-        pid = pids[i + 1]
-        text_bg = cv2.putText(text_bg, str(pid), (0, 15), cv2.FONT_HERSHEY_COMPLEX, 0.5, (255, 255, 255), 1)
-        g_img = np.concatenate([g_img, text_bg], 0)
-        if i == 0:
-            rank1_success_marks = flag
-        img_res.append(g_img)
-    img_res = np.concatenate(img_res, 1)
-    img_res = np.transpose(img_res, (2, 0, 1))
-    img_res = torch.tensor(img_res, dtype=torch.uint8)
-    #img_res = torch.unsqueeze(img_res,dim=0)
-    return img_res, rank1_success_marks
+            return [cmc, mAP, mINP]
