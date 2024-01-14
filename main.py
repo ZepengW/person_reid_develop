@@ -30,11 +30,12 @@ def main(cfg_dict: dict, logger_comet: CometLogger):
     dir_weights = os.path.join('output', exp_name, 'weights')
     os.makedirs(dir_weights, exist_ok=True)
     checkpoint_callback = ModelCheckpoint(
-        monitor='val/mAP',
         dirpath=dir_weights,
-        filename='E{epoch}-mAP{val/mAP:.2%}',
+        filename=exp_name+'-E{epoch}',
+        every_n_epochs=cfg_dict.get('eval_interval', 10),
         save_last=True,
-        auto_insert_metric_name=False
+        auto_insert_metric_name=False,
+        verbose=True
     )
     # Trainer for Lightning
     job = Lp.Trainer(
@@ -46,7 +47,8 @@ def main(cfg_dict: dict, logger_comet: CometLogger):
         max_epochs=cfg_model.get('epoch', 100),
         logger=logger_comet,
         check_val_every_n_epoch=cfg_dict.get('eval_interval', 10),
-        num_sanity_val_steps=-1
+        num_sanity_val_steps=-1,
+        inference_mode=True
     )
     # initial dataset
     cfg_data = cfg_dict.get('dataset', dict())
