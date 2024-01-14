@@ -8,3 +8,6 @@ __pycache__/
 
 #project
 output/
+
+#log file
+lightning_logs/
