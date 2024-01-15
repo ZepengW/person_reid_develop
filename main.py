@@ -38,30 +38,38 @@ def main(cfg_dict: dict, logger_comet: CometLogger):
         verbose=True
     )
     # Trainer for Lightning
+    cfg_engine = cfg_dict.get('Engine')
     job = Lp.Trainer(
         callbacks=[checkpoint_callback],
-        accelerator='cpu' if cfg_dict.get('gpus', 'auto') == -1 else 'gpu',
-        devices=cfg_dict.get('gpus', 'auto'),
-        precision=cfg_dict.get('precision', 32),
-        min_epochs=cfg_model.get('epoch', 100),
-        max_epochs=cfg_model.get('epoch', 100),
+        accelerator='cpu' if cfg_engine.get('gpus', 'auto') == -1 else 'gpu',
+        devices=cfg_engine.get('gpus', 'auto'),
+        precision=cfg_engine.get('precision', 32),
+        min_epochs=cfg_engine.get('epoch', 100),
+        max_epochs=cfg_engine.get('epoch', 100),
         logger=logger_comet,
-        check_val_every_n_epoch=cfg_dict.get('eval_interval', 10),
-        num_sanity_val_steps=-1,
-        inference_mode=True
+        check_val_every_n_epoch=cfg_engine.get('eval_interval', 10),
+        # num_sanity_val_steps=-1,
+        inference_mode=True,
     )
     # initial dataset
     cfg_data = cfg_dict.get('dataset', dict())
     # initial model
-    mode = cfg_dict.get('mode', 'train')
     model = ModelManager(cfg_model, cfg_data)
+    # resume
+    resume_path = cfg_engine.get('resume', None)
+    if resume_path is not None:
+        if not os.path.isfile(resume_path):
+            logging.warning(f'Can not find resume: {resume_path}')
+            resume_path = None
+
+    mode = cfg_dict.get('mode', 'train')
     if 'train' == mode:
         logging.info('Begin to train')
-        job.fit(model)
+        job.fit(model, ckpt_path=resume_path)
         logging.info('End train')
     elif 'test' == mode:
         logging.info('Begin to test')
-        job.test(model)
+        job.test(model, ckpt_path=resume_path)
         logging.info('End test')
     else:
         logging.error(f'not support mode:{mode}')
@@ -95,16 +103,39 @@ def merge_data(data_1, data_2):
             return data_2
 
 
+def params_overwrite(cfg_dict, cfg_cli):
+    # overwrite params from cli
+    # 覆盖yaml文件中的参数
+    if cfg_cli.test:
+        cfg_dict['mode'] = 'test'
+
+    if cfg_cli.resume:
+        cfg_dict['Engine']['resume'] = cfg_cli.resume
+
+    if cfg_cli.params is not None:
+        overrides = cfg_cli.params.split(',')
+        for override in overrides:
+            key, value = override.split('=')
+            keys = key.split('.')
+            last_key = keys.pop()
+            temp = cfg_dict
+            for k in keys:
+                temp = temp[k]
+            temp[last_key] = type(temp[last_key])(value)
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--cfg_base', type=str, default='config/cfg-base.yaml', help='the config file(.yaml)')
     parser.add_argument('--cfg', type=str, default='', help='the config file(.yaml)')
     parser.add_argument('--no_log', action='store_true', default=False, help='do not save log file')
+    parser.add_argument('--test', action='store_true', default=False, help='test stage')
+    parser.add_argument('--resume', type=str, help='path to load ckpt for resume or test')
     parser.add_argument('--params', type=str, help='Override parameters in yaml file')
 
-    config = parser.parse_args()
+    cfg_cli = parser.parse_args()
     # base config
-    cfg_base_path = config.cfg_base
+    cfg_base_path = cfg_cli.cfg_base
     if os.path.exists(cfg_base_path):
         print(f'[Info] loading base config file:{cfg_base_path}')
         with open(cfg_base_path) as f:
@@ -114,7 +145,7 @@ if __name__ == '__main__':
         print(f'[Warning] can not find the base config file:{cfg_base_path}')
 
     # detail config
-    cfg_path = config.cfg
+    cfg_path = cfg_cli.cfg
     if os.path.exists(cfg_path):
         print(f'[Info] loading the config file:{cfg_path}')
         with open(cfg_path) as f:
@@ -125,19 +156,9 @@ if __name__ == '__main__':
         yaml_cfg_detail = dict()
 
     cfg_dict = merge_data(yaml_cfg_base, yaml_cfg_detail)
-    # 覆盖yaml文件中的参数
-    if config.params is not None:
-        overrides = config.params.split(',')
-        for override in overrides:
-            key, value = override.split('=')
-            keys = key.split('.')
-            last_key = keys.pop()
-            temp = cfg_dict
-            for k in keys:
-                temp = temp[k]
-            temp[last_key] = type(temp[last_key])(value)
+    params_overwrite(cfg_dict, cfg_cli)
 
-    if not config.no_log:
+    if not cfg_cli.no_log:
         # initial logging module
         logger_cfg = cfg_dict['logger']
         logger_comet = CometLogger(
@@ -155,3 +176,5 @@ if __name__ == '__main__':
     else:
         logger_comet = None
     main(cfg_dict, logger_comet)
+
+

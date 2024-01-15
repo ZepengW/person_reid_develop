@@ -1,5 +1,8 @@
-gpu: [0]
-eval_interval: 10 # eval each [eval_interval]
+Engine:
+  precision: 32
+  epoch: 120
+  gpus: [ 0 ]
+  eval_interval: 10
 
 logger:
   api_key: None
@@ -34,6 +37,9 @@ model-manager:
       expect_inputs: # input for loss [argument]:[parameter]
         feat: feat
         target: pid
+  evaluator:
+    metric: 'euclidean'
+    norm: False
 
 dataset:
   dataset_name: msmt17

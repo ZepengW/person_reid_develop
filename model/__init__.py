@@ -35,11 +35,9 @@ class ModelManager(L.LightningModule):
 
 
         # metric
-        self.metrics = cfg_model.get('metric', 'euclidean')
         self.re_ranking = cfg_model.get('re_ranking', True)
         self.evaluator = Evaluator(
-            self.metrics,
-
+            **cfg_model.get('evaluator', {})
         )
         self.metric_train = Accuracy(task='multiclass', num_classes=network_params.get('num_classes'))
 
