@@ -28,6 +28,7 @@ class Logger:
     def set_log_file(self, log_file_path):
         if self.file_handler:
             self.logger.removeHandler(self.file_handler)
+        self.log_file_path = log_file_path
         os.makedirs(os.path.dirname(log_file_path), exist_ok=True)
         self.file_handler = logging.FileHandler(log_file_path)
         self.file_handler.setFormatter(logging.Formatter('%(asctime)s - %(message)s', "%Y-%m-%d %H:%M:%S"))

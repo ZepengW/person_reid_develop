@@ -169,12 +169,15 @@ if __name__ == '__main__':
             rest_api_key=os.environ.get("COMET_REST_API_KEY"),  # Optional
             experiment_key=os.environ.get("COMET_EXPERIMENT_KEY"),  # Optional
             experiment_name=logger_cfg.get('task_name', None),  # Optional
-            auto_output_logging='simple'
+            auto_output_logging=False
         )
         logging.set_log_file(os.path.join('output', logger_comet.experiment.get_name(), logger_comet.experiment.get_name())+'.log')
         logger_comet.log_hyperparams(cfg_dict)
     else:
         logger_comet = None
     main(cfg_dict, logger_comet)
+    if not cfg_cli.no_log:
+        print("update logging file")
+        logger_comet.experiment.log_asset(logging.log_file_path, file_name='log')
 
 
