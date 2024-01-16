@@ -16,9 +16,11 @@ class GetImg(object):
     :return:
     """
 
-    def __init__(self, type, **kwargs):
-        self.img_size = kwargs.get('image_size')
-        self.tf = build_transforms(self.img_size, type = type)
+    def __init__(self, **kwargs):
+        self.tf = build_transforms(**kwargs['transform_params'])
+
+    def __str__(self):
+        return self.tf.__str__()
 
     def __call__(self, data: dict):
         img_path = data.get('img_path')
