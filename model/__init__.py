@@ -50,12 +50,15 @@ class ModelManager(L.LightningModule):
         # reading method for train
         logging.info('Initial train loader')
         m_reading_train_cfg = self.cfg_data.get('reading_method_train')
-        m_reading_train = initial_m_reading(m_reading_train_cfg.get('name'), **m_reading_train_cfg)
+        params = m_reading_train_cfg.get('params')
+        m_reading_train = initial_m_reading(m_reading_train_cfg.get('name'), **params)
         batch_size_train = self.cfg_data.get('batch_size_train', 16)
         num_instance = self.cfg_data.get('num_instance', 4)
         data_sampler = RandomIdentitySampler(self.dataset_manager.get_dataset_list('train'),
                                              batch_size_train,
                                              num_instance)
+        logging.info("Reading method (Train)")
+        logging.info(m_reading_train)
         loader_train = DataLoader(
             self.dataset_manager.get_dataset_image('train', m_reading_train),
             num_workers=self.cfg_data.get('num_workers', 8),
@@ -68,7 +71,10 @@ class ModelManager(L.LightningModule):
     def val_dataloader(self) -> EVAL_DATALOADERS:
         logging.info('Initial gallery loader')
         m_reading_test_cfg = self.cfg_data.get('reading_method_test')
-        m_reading_test = initial_m_reading(m_reading_test_cfg.get('name'), **m_reading_test_cfg)
+        params = m_reading_test_cfg.get('params')
+        m_reading_test = initial_m_reading(m_reading_test_cfg.get('name'), **params)
+        logging.info("Reading method (Test)")
+        logging.info(m_reading_test)
         loader_gallery = DataLoader(
             self.dataset_manager.get_dataset_image('test', m_reading_test),
             batch_size=self.cfg_data.get('batch_size_test', 16),

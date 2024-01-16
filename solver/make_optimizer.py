@@ -13,30 +13,53 @@ def make_optimizer(cfg_solver:dict, model, center_criterion= None):
     :return: optimizer, optimizer_center
     """
     optimizer = cfg_solver.get('optimizer', 'Adam')
-    lr_base = cfg_solver.get('base_lr', 0.0003)
+    lr_base = cfg_solver.get('lr', 0.0003)
     weight_decay_base = cfg_solver.get('weight_decay', 0.0005)
     logging.info(f'=> Initial Optimizer:{optimizer}')
     logging.info(f'----base base_lr:{lr_base}')
     logging.info(f'----base weight_decay:{weight_decay_base}')
-    cfg_params = cfg_solver.get('params_group', dict())
-    spec_layer = cfg_solver.get('spec_layer', [])
-    #format [{'re':'layer_name regex', 'lr':'lr', 'weight_decay':'weight_decay'}]
     # if lr is 0, demonstrate the layers matched is frozen
-    params_groups = defaultdict(list)
-    params_groups['default'] = {"params": [], "group_name": "default"}
+    params_groups = []
+    params_groups.append({"key":'', "group_name": "default",
+                                "params": [], "params_name": [],
+                                "lr": lr_base, "weight_decay": weight_decay_base})
+    cfg_lrgroup = cfg_solver.get('lr_group')
+    for lr_group in cfg_lrgroup:
+        key = [lr_group['key']] if isinstance(lr_group['key'], str) else lr_group['key']
+        lr = lr_group.get('lr', lr_base)
+        weight_decay = lr_group.get('weight_decay', weight_decay_base)
+        params_groups.append({
+            'key': key,
+            'group_name': lr_group['name'],
+            'params': [],
+            'params_name': [],
+            'lr': lr,
+            'weight_decay': weight_decay
+        })
+
     for key, value in model.named_parameters():
         if not value.requires_grad:
             continue
-        params_groups['default']['params'].append(value)
-    params = list(params_groups.values())
+        flag_finish = False
+        for item in params_groups[1:]:
+            for key_search in item['key']:
+                if re.search(key_search, key):
+                    if item['lr'] == 0:
+                        value.requires_grad = False
+                    item['params'].append(value)
+                    item['params_name'].append(key)
+                    flag_finish = True
+                    break
+        if not flag_finish:
+            params_groups[0]['params'].append(value)
+            params_groups[0]['params_name'].append(key)
+    log_network_lr(params_groups)
     if optimizer == 'SGD':
-        optimizer = getattr(torch.optim, optimizer)(params, momentum=cfg_solver.get('momentum', 0.9), lr=lr_base,
-                                      weight_decay=weight_decay_base)
+        optimizer = getattr(torch.optim, optimizer)(params_groups, momentum=cfg_solver.get('momentum', 0.9))
     elif optimizer == 'AdamW':
-        optimizer = torch.optim.AdamW(params, lr=lr_base,
-                                      weight_decay=weight_decay_base)
+        optimizer = torch.optim.AdamW(params_groups)
     else:
-        optimizer = getattr(torch.optim, optimizer)(params, lr = lr_base, weight_decay = weight_decay_base)
+        optimizer = getattr(torch.optim, optimizer)(params_groups)
 
     if not center_criterion is None:
         optimizer_center = torch.optim.SGD(center_criterion.parameters(), lr= cfg_solver.get('center_lr', 0.5))
@@ -44,3 +67,16 @@ def make_optimizer(cfg_solver:dict, model, center_criterion= None):
         optimizer_center = None
 
     return optimizer, optimizer_center
+
+
+def log_network_lr(params_groups):
+    """
+    Log the learning rate and weight decay of each parameter group in a beautiful manner
+    :param params_groups: dict
+    """
+    for group in params_groups:
+        lr = group['lr']
+        weight_decay = group['weight_decay']
+        logging.info(f"Group: {group['group_name']}, Key: {group['key']} Initial lr: {lr:.2e}, Initial weight decay: {weight_decay:.2e}")
+        for param_name in group['params_name']:
+            logging.info(f"----Parameter: {param_name}")
