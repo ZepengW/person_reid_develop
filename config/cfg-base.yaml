@@ -5,8 +5,8 @@ Engine:
   eval_interval: 10
 
 logger:
-  api_key: None
-  workspace: None
+  api_key: Je9b8v3VpWJdI1GJXRoxOhDEy
+  workspace: oliverck
   project_name: reid
   task_name: MSMT17-ResNet50
 
