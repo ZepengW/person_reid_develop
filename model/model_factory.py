@@ -1,9 +1,11 @@
 from utils.logger import Logger
 logging = Logger()
 from .net.transreid import TransReID
+from .net.backbones.osnet import build_model as osnet
 
 __factory_model = {
     'transreid': TransReID,
+    'osnet': osnet
 }
 
 
