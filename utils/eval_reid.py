@@ -65,7 +65,8 @@ class Evaluator(object):
                 k1=self.k1, k2=self.k2, lambda_value=self.lambda_value)
         if self.mode == 'FWreID':
             indices = np.argsort(dist, axis=1)
-            now = datetime.now().strftime("%Y%m%d:%H%M%S")
+            now = datetime.now().strftime("%Y%m%d_%H%M%S")
+            os.makedirs(self.save_dir, exist_ok=True)
             save_path = os.path.join(self.save_dir, f'indices-{now}.csv')
             with open(save_path, 'w', newline='') as file:
                 writer = csv.writer(file)
