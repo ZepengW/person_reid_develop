@@ -146,7 +146,9 @@ def eval_market1501(distmat, q_pids, g_pids, q_camids, g_camids, max_rank):
         # reference: https://en.wikipedia.org/wiki/Evaluation_measures_(information_retrieval)#Average_precision
         num_rel = raw_cmc.sum()
         tmp_cmc = raw_cmc.cumsum()
-        tmp_cmc = [x / (i + 1.) for i, x in enumerate(tmp_cmc)]
+        #tmp_cmc = [x / (i + 1.) for i, x in enumerate(tmp_cmc)]
+        y = np.arange(1, tmp_cmc.shape[0] + 1) * 1.0
+        tmp_cmc = tmp_cmc / y
         tmp_cmc = np.asarray(tmp_cmc) * raw_cmc
         AP = tmp_cmc.sum() / num_rel
         all_AP.append(AP)
