@@ -91,7 +91,11 @@ class ModelManager(L.LightningModule):
             shuffle=False
         )
         return [loader_gallery, loader_query]
+    
     def test_dataloader(self) -> EVAL_DATALOADERS:
+        return self.val_dataloader()
+    
+    def predict_dataloader(self) -> EVAL_DATALOADERS:
         return self.val_dataloader()
 
     def configure_optimizers(self):
@@ -233,3 +237,26 @@ class ModelManager(L.LightningModule):
     def on_test_epoch_end(self):
         # Call the on_validation_epoch_end method for testing
         self.on_validation_epoch_end()
+    
+    def on_predict_epoch_start(self) -> None:
+        self.on_validation_epoch_start()
+        
+    def predict_step(self, batch, batch_idx, dataloader_idx=0):
+        # Call the validation_step method for prediction
+        return self.validation_step(batch, batch_idx, dataloader_idx)
+    
+    def on_predict_epoch_end(self):
+        # Call the on_validation_epoch_end method for prediction
+        feat_gallery = torch.cat(self.feat_gallery_l)
+        feat_query = torch.cat(self.feat_query_l)
+        pid_gallery = np.concatenate(self.pid_gallery_l)
+        pid_query = np.concatenate(self.pid_query_l)
+        cid_gallery = np.concatenate(self.cid_gallery_l)
+        cid_query = np.concatenate(self.cid_query_l)
+        self.evaluator.infer(feat_query, feat_gallery, re_ranking=self.re_ranking)
+        self.feat_gallery_l.clear()
+        self.pid_gallery_l.clear()
+        self.cid_gallery_l.clear()
+        self.feat_query_l.clear()
+        self.pid_query_l.clear()
+        self.cid_query_l.clear()
