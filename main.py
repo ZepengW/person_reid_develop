@@ -12,6 +12,7 @@ from dataset import DatasetManager, initial_m_reading
 from model import ModelManager
 from torch.utils.data import DataLoader
 import yaml
+import ast
 
 
 
@@ -26,19 +27,21 @@ def main(cfg_dict: dict, logger_comet: CometLogger):
     cfg_model = cfg_dict.get('model-manager', dict())
 
     # callback
+    # Trainer for Lightning
+    cfg_engine = cfg_dict.get('Engine')
     exp_name = cfg_dict['logger']['task_name']
     dir_weights = os.path.join('output', exp_name, 'weights')
     os.makedirs(dir_weights, exist_ok=True)
     checkpoint_callback = ModelCheckpoint(
         dirpath=dir_weights,
         filename=exp_name+'-E{epoch}',
-        every_n_epochs=cfg_dict.get('eval_interval', 10),
-        save_last=True,
+        every_n_epochs=cfg_engine.get('save_interval', cfg_engine.get('eval_interval', 10)),
+        #save_last=True,
         auto_insert_metric_name=False,
-        verbose=True
+        verbose=True,
+        save_on_train_epoch_end=True,
+        save_top_k=-1
     )
-    # Trainer for Lightning
-    cfg_engine = cfg_dict.get('Engine')
     eval_interval = cfg_engine.get('eval_interval', 10)
     epoch = cfg_engine.get('epoch', 100)
     if eval_interval <= 0:
@@ -132,7 +135,13 @@ def params_overwrite(cfg_dict, cfg_cli):
             temp = cfg_dict
             for k in keys:
                 temp = temp[k]
-            temp[last_key] = type(temp[last_key])(value)
+            try:
+                temp[last_key] = type(temp[last_key])(value)
+            except:
+                try: # ast.literal_eval
+                    temp[last_key] = ast.literal_eval(value)
+                except:
+                    temp[last_key] = value
 
 
 if __name__ == '__main__':
