@@ -39,16 +39,23 @@ def main(cfg_dict: dict, logger_comet: CometLogger):
     )
     # Trainer for Lightning
     cfg_engine = cfg_dict.get('Engine')
+    eval_interval = cfg_engine.get('eval_interval', 10)
+    epoch = cfg_engine.get('epoch', 100)
+    if eval_interval <= 0:
+        num_sanity_val_steps = 0
+        eval_interval = epoch + 1
+    else:
+        num_sanity_val_steps = None
     job = Lp.Trainer(
         callbacks=[checkpoint_callback],
         accelerator='cpu' if cfg_engine.get('gpus', 'auto') == -1 else 'gpu',
         devices=cfg_engine.get('gpus', 'auto'),
         precision=cfg_engine.get('precision', 32),
-        min_epochs=cfg_engine.get('epoch', 100),
-        max_epochs=cfg_engine.get('epoch', 100),
+        min_epochs=epoch,
+        max_epochs=epoch,
         logger=logger_comet,
-        check_val_every_n_epoch=cfg_engine.get('eval_interval', 10),
-        # num_sanity_val_steps=-1,
+        check_val_every_n_epoch=eval_interval,
+        num_sanity_val_steps=num_sanity_val_steps,
         inference_mode=True,
     )
     # initial dataset

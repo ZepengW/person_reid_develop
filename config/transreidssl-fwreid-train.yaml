@@ -1,0 +1,95 @@
+Engine:
+  precision: 32
+  epoch: 120
+  gpus: [ 1 ]
+  eval_interval: -1
+
+logger:
+  task_name: FWreID-TransReID_SSL
+
+model-manager:
+  network_name: transreid_ssl # the network model
+  network-params: # the params used to create model
+    PRETRAIN_CHOICE: 'imagenet'
+    PRETRAIN_PATH: 'pretrained/vit_base_ics_cfs_lup.pth'
+    RESUME_PATH: ''
+    METRIC_LOSS_TYPE: 'triplet'
+    IF_LABELSMOOTH: 'off'
+    IF_WITH_CENTER: 'no'
+    NAME: 'transformer'
+    NO_MARGIN: True
+    TRANSFORMER_TYPE: 'vit_base_patch16_224_TransReID'
+    STRIDE_SIZE: [ 16, 16 ]
+    SIE_CAMERA: True
+    SIE_COE: 3.0
+    JPM: True
+    RE_ARRANGE: True
+    CAMERA_NUM: 2
+    SIZE_INPUT: [384, 128]
+    num_classes: 96
+    stem_conv: True
+  network_inputs: ['img','camera_id'] # the data dict keys which the network input
+  solver:
+    optimizer: SGD
+    lr: &lr 0.0004
+    weight_decay: &wd 0.0001
+    lr_group:
+      - name: '2x_lr'
+        key:
+          - '.*bias.*'
+        lr: 0.0008
+        weight_decay: *wd
+    # lr schedular
+    cosine_mergin: 0.5
+    warmup_epochs: 20
+    max_epoch: 120
+  loss:
+    - name: 'loss-xent'  # loss name for display
+      type: 'xent'  # loss function (defined in loss.LOSS_FACTORY)
+      kwargs: # params for initializing loss module
+        list_weight: [0.5,0.125,0.125,0.125,0.125]
+      weight: 1.0   # total loss = weight_1 * loss_1 + weight_2 * loss_2 + ...
+      expect_inputs: # input for loss [argument]:[parameter]
+        input: score
+        target: pid
+    - name: 'loss-triplet'  # loss name for display
+      type: 'triplet'  # loss function (defined in loss.LOSS_FACTORY)
+      kwargs: # params for initializing loss module
+        list_weight: [ 0.5,0.125,0.125,0.125,0.125 ]
+      weight: 1.0   # total loss = weight_1 * loss_1 + weight_2 * loss_2 + ...
+      expect_inputs: # input for loss [argument]:[parameter]
+        feat: feat
+        target: pid
+  re_ranking: False
+  evaluator:
+    metric: 'euclidean'
+    norm: True
+
+
+dataset:
+  dataset_name: fwreid
+  dataset_path: data/FWreID
+  num_workers: 4
+  batch_size_train: 64
+  reading_method_train:
+    name: get_img
+    # define other parameter, such as image size
+    params:
+      transform_params:
+        size: [ 384, 128 ]
+        mean: [0.5, 0.5, 0.5]
+        std: [0.5, 0.5, 0.5]
+        type: train
+  batch_size_test: 256
+  reading_method_test:
+    name: get_img
+    # define other parameter, such as image size
+    params:
+      transform_params:
+        size: [ 384, 128 ]
+        mean: [ 0.5, 0.5, 0.5 ]
+        std: [ 0.5, 0.5, 0.5 ]
+        type: test
+  type: image
+
+

@@ -30,17 +30,23 @@ class Evaluator(object):
             feat_g = feat[feat_q.shape[0]:]
         print("compute dist mat")
         dist = build_dist(feat_q, feat_g, metric=self.metric)
+        print("calculate metric")
+        cmc, all_AP, all_INP = evaluate_rank(dist, q_pids, g_pids, q_camids, g_camids,
+                                             max_rank=max_rank, use_metric_cuhk03=self.use_metric_cuhk03)
+        mAP = np.mean(all_AP)
+        mINP = np.mean(all_INP)
         if re_ranking:
             print("Re-Ranking")
             dist_qq = build_dist(feat_q, feat_q, metric=self.metric)
             dist_gg = build_dist(feat_g, feat_g, metric=self.metric)
             dist = re_ranking_optimize(dist, dist_qq, dist_gg,\
                 k1=self.k1, k2=self.k2, lambda_value=self.lambda_value)
-        print("calculate metric")
-        cmc, all_AP, all_INP = evaluate_rank(dist, q_pids, g_pids, q_camids, g_camids,
-                                             max_rank=max_rank, use_metric_cuhk03=self.use_metric_cuhk03)
-        mAP = np.mean(all_AP)
-        mINP = np.mean(all_INP)
+            print("calculate metric")
+            cmc_rk, all_AP_rk, all_INP_rk = evaluate_rank(dist, q_pids, g_pids, q_camids, g_camids,
+                                                max_rank=max_rank, use_metric_cuhk03=self.use_metric_cuhk03)
+            mAP_rk = np.mean(all_AP_rk)
+            mINP_rk = np.mean(all_INP_rk)
+            return cmc, mAP, mINP, cmc_rk, mAP_rk, mINP_rk
         return cmc, mAP, mINP
     
     def infer(self, feat_q, feat_g, name_q=None, name_g=None, max_rank=50, re_ranking=False):

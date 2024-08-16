@@ -2,13 +2,12 @@ import torch
 import torch.nn as nn
 from .backbones.resnet import ResNet, Bottleneck
 import copy
-from .backbones.vit_pytorch_transreid import vit_base_patch16_224_TransReID, vit_small_patch16_224_TransReID, deit_small_patch16_224_TransReID
+from .backbones.vit_pytorch_ssltransreid import vit_base_patch16_224_TransReID, vit_small_patch16_224_TransReID
 import os
 __factory_T_type = {
     'vit_base_patch16_224_TransReID': vit_base_patch16_224_TransReID,
     'deit_base_patch16_224_TransReID': vit_base_patch16_224_TransReID,
-    'vit_small_patch16_224_TransReID': vit_small_patch16_224_TransReID,
-    'deit_small_patch16_224_TransReID': deit_small_patch16_224_TransReID
+    'vit_small_patch16_224_TransReID': vit_small_patch16_224_TransReID
 }
 
 
@@ -127,9 +126,9 @@ class Backbone(nn.Module):
         print('Loading pretrained model for finetuning from {}'.format(model_path))
 
 
-class TransReID(nn.Module):
+class TransReIDSSL(nn.Module):
     def __init__(self, num_classes, **kwargs):
-        super(TransReID, self).__init__()
+        super(TransReIDSSL, self).__init__()
         model_path = kwargs['PRETRAIN_PATH']
         path_resume = kwargs.get('RESUME_PATH', None)
         pretrain_choice = kwargs['PRETRAIN_CHOICE']
@@ -144,9 +143,7 @@ class TransReID(nn.Module):
         view_num = 0
         factory ={
             'vit_base_patch16_224_TransReID': vit_base_patch16_224_TransReID,
-            'deit_base_patch16_224_TransReID': vit_base_patch16_224_TransReID,
             'vit_small_patch16_224_TransReID': vit_small_patch16_224_TransReID,
-            'deit_small_patch16_224_TransReID': deit_small_patch16_224_TransReID
         }
         self.base = factory[transformer_type](img_size=kwargs['SIZE_INPUT'],
                                               sie_xishu=kwargs['SIE_COE'],
@@ -156,11 +153,12 @@ class TransReID(nn.Module):
                                               stride_size=kwargs['STRIDE_SIZE'],
                                               drop_path_rate=0.1,
                                               drop_rate=0.0,
-                                              attn_drop_rate=0.0)
+                                              attn_drop_rate=0.0,
+                                              stem_conv=kwargs['stem_conv'])
         if transformer_type == 'deit_small_patch16_224_TransReID':
             self.in_planes = 384
         if pretrain_choice == 'imagenet':
-            self.base.load_param(model_path)
+            self.base.load_param(model_path, 2)
             print('Loading pretrained ImageNet model......from {}'.format(model_path))
 
         block = self.base.blocks[-1]

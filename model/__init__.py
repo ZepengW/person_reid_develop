@@ -189,7 +189,7 @@ class ModelManager(L.LightningModule):
         cid_gallery = np.concatenate(self.cid_gallery_l)
         cid_query = np.concatenate(self.cid_query_l)
 
-        res = self.evaluator(feat_query, feat_gallery, pid_query, pid_gallery, cid_query, cid_gallery)
+        res = self.evaluator(feat_query, feat_gallery, pid_query, pid_gallery, cid_query, cid_gallery, re_ranking=self.re_ranking)
         cmc = res[0]
         m_ap = res[1]
         m_inp = res[2]
