@@ -5,6 +5,7 @@ from dataset.dataset_msmt import MSMT17
 from dataset.dataset_mars import Mars
 from dataset.dataset_occludedreid import OccludedReID
 from dataset.dataset_partialreid import  PartialReID
+from dataset.dataset_fwreid import FWreID
 import dataset.method_reading as m
 from utils.logger import Logger
 logging = Logger()
@@ -18,6 +19,7 @@ DATASET_MAP = {
     'occ-reid': OccludedReID,
     'partial-reid': PartialReID,
     'mars': Mars,
+    'fwreid': FWreID
 }
 __factory_reading_m = {
     'get_img': m.GetImg

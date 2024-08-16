@@ -71,6 +71,10 @@ def main(cfg_dict: dict, logger_comet: CometLogger):
         logging.info('Begin to test')
         job.test(model, ckpt_path=resume_path)
         logging.info('End test')
+    elif 'infer' == mode:
+        logging.info('Begin to infer')
+        job.predict(model, ckpt_path=resume_path)
+        logging.info('End infer')
     else:
         logging.error(f'not support mode:{mode}')
 
