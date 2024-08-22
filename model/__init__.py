@@ -253,7 +253,7 @@ class ModelManager(L.LightningModule):
         pid_query = np.concatenate(self.pid_query_l)
         cid_gallery = np.concatenate(self.cid_gallery_l)
         cid_query = np.concatenate(self.cid_query_l)
-        self.evaluator.infer(feat_query, feat_gallery, re_ranking=self.re_ranking)
+        self.evaluator.infer(feat_query, feat_gallery, pid_query, pid_gallery, re_ranking=self.re_ranking)
         self.feat_gallery_l.clear()
         self.pid_gallery_l.clear()
         self.cid_gallery_l.clear()

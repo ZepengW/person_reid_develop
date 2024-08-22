@@ -49,7 +49,7 @@ class Evaluator(object):
             return cmc, mAP, mINP, cmc_rk, mAP_rk, mINP_rk
         return cmc, mAP, mINP
     
-    def infer(self, feat_q, feat_g, name_q=None, name_g=None, max_rank=50, re_ranking=False):
+    def infer(self, feat_q, feat_g, pid_q=None, pid_g=None, max_rank=50, re_ranking=False):
         print("retrival evaluate")
         if self.norm:
             feat = F.normalize(torch.cat([feat_q, feat_g], dim=0), dim=1)
@@ -70,4 +70,10 @@ class Evaluator(object):
             save_path = os.path.join(self.save_dir, f'indices-{now}.csv')
             with open(save_path, 'w', newline='') as file:
                 writer = csv.writer(file)
-                writer.writerows(indices)
+                for qid in range(indices.shape[0]):
+                    idx_qid = np.where(pid_q == qid)[0]
+                    row = indices[idx_qid[0]]
+                    row_gid = [pid_g[idx] for idx in row]
+                    # #print(row_gid.tolist())
+                    writer.writerow(row_gid)
+                    # print(f'qid:{qid} -> {row_gid[:5]}')
